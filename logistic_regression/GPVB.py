@@ -45,7 +45,7 @@ N = 100
 
 x_domain = (-5, 5)
 true_func = lambda x:(np.sin(4*x)/x).sum(axis = 1)
-noise_y = 1
+true_sigma = 1
 # -
 
 # ## Generating data
@@ -53,10 +53,10 @@ noise_y = 1
 # +
 np.random.seed(data_seed)
 train_X = np.random.uniform(low = x_domain[0], high = x_domain[1], size = (n,M))
-train_Y = true_func(train_X) + np.random.normal(scale = noise_y, size = n)
+train_Y = true_func(train_X) + np.random.normal(scale = true_sigma, size = n)
 
 test_X = np.random.uniform(low = x_domain[0], high = x_domain[1], size = (N,M))
-test_Y = true_func(test_X) + np.random.normal(scale = noise_y, size = N)
+test_Y = true_func(test_X) + np.random.normal(scale = true_sigma, size = N)
 # -
 
 plt.scatter(train_X[:,0], train_Y)
@@ -65,6 +65,58 @@ plt.show()
 
 # ## Setting for learning
 
+### used library
+from scipy.spatial import distance_matrix
+from scipy.stats import wishart
 
+# +
+iteration = 1000
+learning_seed = 20190729
+M = 10
+np.random.seed(learning_seed)
 
+theta1 = 1; theta2 = 2; theta3 = 0.0001
+ln_sigma = true_sigma
 
+cronecker_delta_sigma = 0.0001
+cronecker_delta = lambda x,y: np.exp(- distance_matrix(x,y)**2/cronecker_delta_sigma)
+gauss_kernel = lambda x,y,theta1, theta2, theta3: theta1 * np.exp(- distance_matrix(x,y)**2/theta2) + theta3 * cronecker_delta(x,y)
+exp_kernel = lambda x,y,theta1, theta2, theta3: theta1 * np.exp(- distance_matrix(x, y, p=1)/theta2) + theta3 * cronecker_delta(x,y)
+used_kernel = gauss_kernel
+# -
+
+sub_train_ind = np.argsort(np.random.dirichlet(alpha = np.ones(n), size = 1)).squeeze()[:M]
+sub_train_X = train_X[sub_train_ind,:]
+sub_train_Y = train_Y[sub_train_ind]
+
+### kernel calculation
+train_sub_kernel = used_kernel(train_X, sub_train_X, theta1, theta2, theta3)
+sub_sub_kernel = used_kernel(sub_train_X, sub_train_X, theta1, theta2, theta3)
+inv_sub_sub_kernel = np.linalg.inv(sub_sub_kernel)
+proj_train_sub = train_sub_kernel @ inv_sub_sub_kernel
+
+true_u = true_func(sub_train_X)
+
+### initialization
+est_u = np.random.normal(size = M)
+est_sigma = wishart.rvs(df = M+2, scale = np.eye(M), size = 1)
+
+obj_func = (np.linalg.slogdet(est_sigma)[1] - np.linalg.slogdet(inv_sub_sub_kernel)[1])/2 - M/2 + 
+
+obj_func
+
+### gradient based calculation
+eta0 = 1
+for ite in range(iteration):
+    du = (inv_sub_sub_kernel + proj_train_sub.T @ proj_train_sub) @ est_u - proj_train_sub.T @ train_Y/ln_sigma
+    dsigma = -hat_sigma/2 + inv_sub_sub_kernel/2 + proj_train_sub.T @ proj_train_sub/(2*ln_sigma)
+    est_u += -eta0 * du
+    est_sigma += -eta0 * dsigma
+    break
+    pass
+
+true_u
+
+du
+
+est_u
