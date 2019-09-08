@@ -10,6 +10,19 @@ from scipy.stats import multivariate_normal
 
 ## local libraries
 
+def ratio_tanh_x(x):
+    """
+    Calculating f(x)=tanh(x)/x.
+    While lim_{x -> 0} f(x) = 1, overflow is occured at zero point.
+    Thus, this function is conditioned by zero point and other points.
+    """
+    zero_condition = 1e-20
+    ret_val = np.zeros(x.shape)
+    zero_ind = np.abs(x) < zero_condition
+    ret_val[~zero_ind] = np.tanh(x[~zero_ind])/x[~zero_ind]
+    ret_val[zero_ind] = 1
+    return ret_val
+
 def logcosh(x:np.ndarray):
     """
     Calculating a log cosh(x).

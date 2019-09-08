@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.4'
-#       jupytext_version: 1.1.3
+#       jupytext_version: 1.2.1
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -16,12 +16,21 @@
 # # スパースガウス過程でロジスティック回帰をminibatchでやるための試作
 
 # %matplotlib inline
+# %load_ext autoreload
+# %autoreload 2
 
+import sys
+sys.path.append("../lib")
+
+# +
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.special import expit
 from scipy.spatial import distance_matrix
 from scipy.stats import wishart
+
+from util import logcosh, ratio_tanh_x
+# -
 
 # ## 学習設定
 
@@ -63,6 +72,7 @@ used_kernel = gauss_kernel
 used_kernel_diag = gauss_kernel_diag
 
 step = 0.5
+tol = 1e-7
 # -
 
 # ## 部分データの選択
@@ -83,8 +93,8 @@ train_sub_kernel = used_kernel(train_X, sub_train_X)
 ## 事後分布の形状パラメータの初期化
 est_u = np.random.normal(size = sub_n)
 est_Sigma = wishart.rvs(df = sub_n + 2, scale = np.eye(sub_n), size = 1)
-est_g_xi = np.random.normal(size = n)
-
+# est_g_xi = np.random.normal(size = n)
+est_h_xi = np.abs(np.random.normal(size = n))
 nu1 = np.linalg.solve(est_Sigma, est_u)
 nu2 = -np.linalg.inv(est_Sigma)/2
 # -
@@ -94,82 +104,45 @@ nu2 = -np.linalg.inv(est_Sigma)/2
 a = train_sub_kernel @ inv_sub_sub_kernel
 est_var_fu = used_kernel_diag(train_X) - ((train_sub_kernel @ inv_sub_sub_kernel) * train_sub_kernel).sum(axis = 1)
 
-
-def logcosh(x):
-    return np.abs(x) + np.log((1 + np.exp(-2*np.abs(x)))/2)
-
-
-zero_condition = 0.000001
-def ratio_tanh_x(x):
-    """
-    tanh(x/2)/xの計算
-    原点がoverflowの原因になるが、原点の値は1/2
-    """
-    ratio_val = np.zeros(len(sq_h_xi))
-    zero_ind = np.abs(x) < zero_condition
-    ratio_val[zero_ind] = 1/2
-    ratio_val[~zero_ind] = np.tanh(ratio_val[~zero_ind]/2)/(ratio_val[~zero_ind])
-    return ratio_val
-
-
-# +
-# zero_condition = 0.000001
-# def calc_dphidh(sq_h_xi):
-#     v_xi = np.zeros(len(sq_h_xi))
-#     zero_ind = np.abs(sq_h_xi) < zero_condition
-#     v_xi[zero_ind] = -1/8
-#     v_xi[~zero_ind] = -np.tanh(sq_h_xi[~zero_ind]/2)/(4*sq_h_xi[~zero_ind])
-#     return v_xi
-# -
-
-est_h_xi = np.exp(est_g_xi)
-est_sq_h_xi = np.sqrt(est_h_xi)
-est_v_xi = calc_dphidh(est_sq_h_xi)
-
-
-dFdnu1 = -(train_Y - 0.5) @ a + nu1
-dFdnu2 = np.einsum("i, ij, ik -> jk", -est_v_xi, a, a) + inv_sub_sub_kernel/2 + nu2
-nu1 += -step * dFdnu1
-nu2 += -step * dFdnu2
-
-
-dvdg = -((1/np.cosh(est_sq_h_xi/2)**2/4) - np.tanh(est_sq_h_xi/2)/est_sq_h_xi/2)/4
-dFdg = -dvdg*(est_var_fu + ((a @ nu2) * a).sum(axis = 1) - est_h_xi)
-est_g_xi += -step * dFdg
-
-
+current_F = np.inf
 for ite in range(iteration):
     ## 補助変数のを計算用に変換する
-    est_h_xi = np.exp(est_g_xi)
     est_sq_h_xi = np.sqrt(est_h_xi)
-    est_v_xi = calc_dphidh(est_sq_h_xi)
+    est_v_xi = -ratio_tanh_x(est_sq_h_xi/2)/8
     
     ## 事後分布の形状パラメータの計算
+    b = np.sqrt(-est_v_xi.repeat(sub_n).reshape((n, sub_n)))*a
     dFdnu1 = -(train_Y - 0.5) @ a + nu1
-    dFdnu2 = np.einsum("i, ij, ik -> jk", -est_v_xi, a, a) + inv_sub_sub_kernel/2 + nu2
+    dFdnu2 = b.T @ b + inv_sub_sub_kernel/2 + nu2
     nu1 += -step * dFdnu1
     nu2 += -step * dFdnu2
     
     ## 補助変数の計算 -> もともとのものにlogを付けた変数の最適化を行っている
-    dvdg = -((1/np.cosh(est_sq_h_xi/2)**2/4) - np.tanh(est_sq_h_xi/2)/est_sq_h_xi/2)/4
-    dFdg = -dvdg*(est_var_fu + ((a @ nu2) * a).sum(axis = 1) - est_h_xi)
-    est_g_xi += -step * dFdg
-    
+    est_Sigma = -np.linalg.inv(nu2)/2
+    est_u = -np.linalg.solve(nu2, nu1)/2
+    m2_u = est_Sigma + est_u.reshape((sub_n, 1)) @ est_u.reshape((1, sub_n))
+    est_h_xi = est_var_fu + ((a @ m2_u) * a).sum(axis = 1)
     ### エネルギーの計算
-    est_h_xi = np.exp(est_g_xi)
     est_sq_h_xi = np.sqrt(est_h_xi)
-    est_v_xi = calc_dphidh(est_sq_h_xi)    
-    phi_h = (-logcosh(est_g_xi)-np.log(2)).sum()
-    est_Sigma = nu2 - nu1.reshape((sub_n,1)) @ nu1.reshape((1,sub_n))
+    est_v_xi = -ratio_tanh_x(est_sq_h_xi/2)/8
+    phi_h = (-logcosh(est_sq_h_xi/2)-np.log(2)).sum()
     F = 0
     F += -phi_h + est_v_xi @ est_h_xi
-    F += -(train_Y - 0.5) @ a @ nu1 - est_v_xi @ (est_var_fu + ((a @ nu2)*a).sum(axis=1))
-    F += (np.trace(inv_sub_sub_kernel @ est_Sigma) + nu1 @ inv_sub_sub_kernel @ nu1 - sub_n + np.linalg.slogdet(sub_sub_kernel)[1] -  np.linalg.slogdet(est_Sigma)[1])/2
+    F += -(train_Y - 0.5) @ a @ est_u - est_v_xi @ (est_var_fu + ((a @ m2_u)*a).sum(axis=1))
+    F += (np.trace(inv_sub_sub_kernel @ est_Sigma) + est_u @ inv_sub_sub_kernel @ est_u - sub_n + np.linalg.slogdet(sub_sub_kernel)[1] -  np.linalg.slogdet(est_Sigma)[1])/2
     
-    print(F, np.sqrt((dFdg**2).mean()), np.sqrt((dFdnu1**2).mean()), np.sqrt((dFdnu2**2).mean()))
-    break
+    print(F, np.sqrt((dFdnu1**2).mean()), np.sqrt((dFdnu2**2).mean()))
+    
+    if np.abs(F - current_F) < tol:
+        break
+    current_F = F
+    
     pass
 
-est_g_xi.min()
+plt.scatter(sub_train_X[:,0], true_func(sub_train_X))
+plt.scatter(sub_train_X[:,0], est_u)
+plt.show()
 
-
+plt.scatter(sub_train_X[:,0], expit(true_func(sub_train_X)))
+plt.scatter(sub_train_X[:,0], expit(est_u))
+plt.show()
