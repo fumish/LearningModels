@@ -1,0 +1,21 @@
+{
+    "collab_server" : "",
+    "contents" : "\n\n## problem setting\nsource(\"logistic.R\")\nn <- 1000\nM <- 3\nK0 <- 2\n\n##input\ninput.seed <- 2\nxrange <- c(-5,5)\nx <- input.unif.generate(n,M,input.seed, xrange)\n\n##generate parameter\nparam.seed <- 3\n# true.param <- param.mixture.norm.generate(M, K=K0, seed = param.seed)\ntrue.ratio <- rep(1/K0,K0)\ntrue.weight <- matrix(c(1,1,0,-1,-1,-1),nrow=M,ncol=K0)\ntrue.param <- list(ratio=true.ratio, weight=true.weight)\n\n##output\noutput.seed <- 3\noutput.info <- output.mixture.logistic.generate(n,x,true.param,seed=output.seed)\ny <- output.info$output\nlabel <- output.info$label\n\n##model settings\nbeta <- 0.1 ##inverse covariance\nphi <- 0.01\nK <- 3\nlearning.seed <- 7\ninit.mean <- 0\ninit.sd <- 1\ninit.phi <- 1\niteration <- 4000\n\nresult <- LVA.mixture.logistic.regression.debug(x,y,K,beta = beta,iteration=iteration, seed=learning.seed,\n                                          init.mean=init.mean, init.sd=init.sd, init.phi = init.phi)",
+    "created" : 1505621573049.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3296013981",
+    "id" : "38326CDC",
+    "lastKnownWriteTime" : 1506741300,
+    "last_content_update" : 1506741300168,
+    "path" : "~/research/R/LVA_logistic/logistic_mixture_test.R",
+    "project_path" : "logistic_mixture_test.R",
+    "properties" : {
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

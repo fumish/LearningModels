@@ -1,0 +1,17 @@
+cell.num <- 52
+
+vehicle.data <- read.table("./data/case1.data")
+index.last <- which(vehicle.data$V2 == 250)
+vehicle.num <- length(index.last)
+index.first <- c(1,(1+index.last[1:(vehicle.num-1)]))
+
+time.length <- index.last[1] - index.first[1] + 1
+
+### spaciotemporal diagram
+data.matrix <- matrix(0, nrow=time.length, ncol=vehicle.num)
+for(i in 1:vehicle.num){
+  data.matrix[,i] <- vehicle.data$V1[index.first[i]:index.last[i]]
+}
+
+
+### cellular automaton

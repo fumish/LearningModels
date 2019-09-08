@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1537145780294.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2104833403",
+    "id" : "83B1D880",
+    "lastKnownWriteTime" : 1537175865,
+    "last_content_update" : 1537175865206,
+    "path" : "~/R/LVA_logistic/lib_logistic_zrp.R",
+    "project_path" : "lib_logistic_zrp.R",
+    "properties" : {
+        "cursorPosition" : "851,15",
+        "scrollLine" : "845"
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
