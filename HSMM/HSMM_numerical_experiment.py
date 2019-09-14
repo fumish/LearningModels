@@ -20,22 +20,25 @@
 
 # # HSMMの性能比較の数値実験
 
-from IPython.core.display import display, Markdown, Latex
+import sys
+sys.path.append("../lib")
+
+# +
 import math
+
+from IPython.core.display import display, Markdown, Latex
 import numpy as np
 from scipy.special import gammaln, psi
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import norm, t, cauchy, laplace, gumbel_r, gamma, skewnorm, pareto, multivariate_normal
 from typing import Callable
-
 from sklearn.mixture import BayesianGaussianMixture
 
-import sys
-sys.path.append("../lib")
 from learning.MixtureModel import HyperbolicSecantMixtureVB
 from learning.MixtureModel import GaussianMixtureModelVB
-from util.elementary_function import GaussianMixtureModel
+from util.elementary_function import GaussianMixtureModel, HyperbolicSecantMixtureModel
+# -
 
 # # 問題設定
 
@@ -98,12 +101,6 @@ K = np.array([3, 5])
 
 # # コンポーネントの分布が正規分布の場合
 
-gerror_gmm.mean()
-
-gerror_hsmm.mean()
-
-
-
 gerror_gmm = np.zeros(len(data_seeds))
 gerror_hsmm = np.zeros(len(data_seeds))
 for i, data_seed in enumerate(data_seeds):
@@ -120,11 +117,59 @@ for i, data_seed in enumerate(data_seeds):
                                          pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
                                          iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
     hsmm_obj.fit(train_X)
+    true_latent_kl, _ = GaussianMixtureModel().score_latent_kl(train_X, true_ratio, true_b, true_s)
+    cerror_gmm[i] = (-true_latent_kl + gmm_obj.score_latent_kl())/len(train_X)
+    cerror_hsmm[i] = (-true_latent_kl + hsmm_obj.score_latent_kl())/len(train_X)
     
     true_empirical_entropy = GaussianMixtureModel().logpdf(test_X, true_ratio, true_b, true_s)
     gerror_gmm[i] = (true_empirical_entropy - gmm_obj.predict_logproba(test_X))/len(test_X)
     gerror_hsmm[i] = (true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
 
+
+print(f"""
+gerror_gmm: {gerror_gmm.mean()},
+gerror_hsmm: {gerror_hsmm.mean()},
+cerror_gmm: {cerror_gmm.mean()},
+cerror_hsmm: {cerror_hsmm.mean()}
+""")
+
+# # コンポーネントの分布が双曲線正割分布の場合
+
+gerror_gmm = np.zeros(len(data_seeds))
+cerror_gmm = np.zeros(len(data_seeds))
+gerror_hsmm = np.zeros(len(data_seeds))
+cerror_hsmm = np.zeros(len(data_seeds))
+for i, data_seed in enumerate(data_seeds):
+    ### データを生成する
+    (train_X, train_label, train_label_arg) = HyperbolicSecantMixtureModel().rvs(true_ratio, true_b, true_s, size = n, data_seed = data_seed)
+    (test_X, test_label, test_label_arg) = HyperbolicSecantMixtureModel().rvs(true_ratio, true_b, true_s, size = N)
+    
+    gmm_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+    gmm_obj.fit(train_X)
+    
+    hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
+                                         pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                         iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+    hsmm_obj.fit(train_X)
+    
+    true_latent_kl, _ = HyperbolicSecantMixtureModel().score_latent_kl(train_X, true_ratio, true_b, true_s)
+    cerror_gmm[i] = (-true_latent_kl + gmm_obj.score_latent_kl())/len(train_X)
+    cerror_hsmm[i] = (-true_latent_kl + hsmm_obj.score_latent_kl())/len(train_X)
+    
+    true_empirical_entropy = -HyperbolicSecantMixtureModel().logpdf(test_X, true_ratio, true_b, true_s)
+    gerror_gmm[i] = (-true_empirical_entropy - gmm_obj.predict_logproba(test_X))/len(test_X)
+    gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
+
+print(f"""
+gerror_gmm: {gerror_gmm.mean()},
+gerror_hsmm: {gerror_hsmm.mean()},
+cerror_gmm: {cerror_gmm.mean()},
+cerror_hsmm: {cerror_hsmm.mean()}
+""")
+
+cerror_hsmm.mean()
 
 # +
 

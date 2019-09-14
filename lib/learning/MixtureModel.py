@@ -12,7 +12,7 @@ from sklearn.base import DensityMixin
 from sklearn.utils.validation import check_is_fitted
 
 ## local libraries
-from util.elementary_function import logcosh
+from util.elementary_function import logcosh, ratio_tanh_x
 
 """
 This is a library for probability distribution of mixture.
@@ -141,7 +141,7 @@ class HyperbolicSecantMixtureVB(DensityMixin, BaseEstimator):
             ### Setting for initial value
             est_u_xi = np.random.dirichlet(alpha = np.ones(self.K), size=n)
             est_g_eta = np.abs(np.random.normal(size=(n,self.K,M)))
-            est_v_eta = -np.repeat(est_u_xi, M).reshape(n, self.K, M) * np.tanh(np.sqrt(est_g_eta)/2)/(4*np.sqrt(est_g_eta))
+            est_v_eta = -np.repeat(est_u_xi, M).reshape(n, self.K, M) * ratio_tanh_x(np.sqrt(est_g_eta)/2)/8
 
             ### Start learning.
             for ite in range(self.iteration):
@@ -154,7 +154,7 @@ class HyperbolicSecantMixtureVB(DensityMixin, BaseEstimator):
 
                 ### Update auxiliary variables
                 est_g_eta = np.repeat(est_gamma / est_delta, n).reshape(self.K,M,n).transpose((2,0,1)) * (expand_x - np.repeat(est_m,n).reshape(self.K,M,n).transpose((2,0,1)))**2 + 1/np.repeat(est_beta, n).reshape(self.K,M,n).transpose((2,0,1))
-                est_v_eta = - np.repeat(est_u_xi, M).reshape(n, self.K, M) * np.tanh(np.sqrt(est_g_eta)/2)/(4*np.sqrt(est_g_eta))
+                est_v_eta = - np.repeat(est_u_xi, M).reshape(n, self.K, M) * ratio_tanh_x(np.sqrt(est_g_eta)/2)/8
 
                 ### Update posterior distribution of latent variable
                 sqrt_g_eta = np.sqrt(est_g_eta)
@@ -231,37 +231,50 @@ class HyperbolicSecantMixtureVB(DensityMixin, BaseEstimator):
         return self.predict_logproba(test_X)
 
     def score_clustering(self, true_label_arg:np.ndarray):
-    """
-    0-1損失によるクラスタ分布の評価
-    1つのデータセットに対する評価で、ラベルの一致数の最大値の平均値を計算する
-    + 入力:
-        1. true_label_arg: 真のラベル番号
-    + 出力:
-        1. max_correct_num: ラベルの最大一致数
-        2. max_perm: 最大一致数を与える置換
-        3. max_est_label_arg: 最大の一致数を与えるラベルの番号
-    """
-    K = len(self.result_["ratio"])
+        """
+        Score the clustering distribution by 0-1 loss.
+        Since label has degree to change the value itself,
+        this function chooses the most fitted permutation.
 
-    est_label_prob = self.result_["u_xi"]
-    target_label_arg = true_label_arg
-    est_label_arg = np.argmax(est_label_prob, axis = 1)
+        + Input:
+            1. true_label_arg: label of true distribution
+        + Output:
+            1. max_correct_num: the best fitted 0-1 loss.
+            2. max_perm: permutation that gives the best fitted one.
+            3. max_est_label_arg: label number that gives the best fitted one.
+        """
+        check_is_fitted(self, "result_")
+        K = len(self.result_["ratio"])
 
-    target_label_arg = true_label_arg
+        est_label_prob = self.result_["u_xi"]
+        target_label_arg = true_label_arg
+        est_label_arg = np.argmax(est_label_prob, axis = 1)
 
-    max_correct_num = 0
-    for perm in list(itertools.permutations(range(K), K)):
-        permed_est_label_arg = est_label_arg.copy()
-        for i in range(len(perm)):
-            permed_est_label_arg[est_label_arg == i] = perm[i]
-        correct_num = (permed_est_label_arg == target_label_arg).sum()
-        if correct_num > max_correct_num:
-            max_correct_num = correct_num
-            max_perm = perm
-            max_est_label_arg = permed_est_label_arg
-    return (max_correct_num, max_perm, max_est_label_arg)
+        target_label_arg = true_label_arg
 
+        max_correct_num = 0
+        for perm in list(itertools.permutations(range(K), K)):
+            permed_est_label_arg = est_label_arg.copy()
+            for i in range(len(perm)):
+                permed_est_label_arg[est_label_arg == i] = perm[i]
+            correct_num = (permed_est_label_arg == target_label_arg).sum()
+            if correct_num > max_correct_num:
+                max_correct_num = correct_num
+                max_perm = perm
+                max_est_label_arg = permed_est_label_arg
+        return (max_correct_num, max_perm, max_est_label_arg)
 
+    def score_latent_kl(self):
+        """
+        Calculate the value of negative log posterior distribution of latent varialble -log(p(z|x,w)).
+        """
+        check_is_fitted(self, "result_")
+        log_complente_likelihood = self.result_["h_xi"]
+        (n,K) =  log_complente_likelihood.shape
+
+        max_log_complente_likelihood = log_complente_likelihood.max(axis = 1)
+        norm_log_complente_likelihood = log_complente_likelihood - np.repeat(max_log_complente_likelihood, K).reshape(n, K)
+        return -norm_log_complente_likelihood.sum() + np.log(np.exp(norm_log_complente_likelihood).sum(axis=1)).sum()
 
     def get_params(self, deep = True):
         return{
@@ -401,6 +414,18 @@ class GaussianMixtureModelVB(DensityMixin, BaseEstimator):
 
     def score(self, test_X:np.ndarray, test_Y:np.ndarray = None):
         return self.predict_logproba(test_X)
+
+    def score_latent_kl(self):
+        """
+        Calculate the value of negative log posterior distribution of latent varialble -log(p(z|x,w)).
+        """
+        check_is_fitted(self, "result_")
+        log_complente_likelihood = self.result_["h_xi"]
+        (n,K) =  log_complente_likelihood.shape
+
+        max_log_complente_likelihood = log_complente_likelihood.max(axis = 1)
+        norm_log_complente_likelihood = log_complente_likelihood - np.repeat(max_log_complente_likelihood, K).reshape(n, K)
+        return -norm_log_complente_likelihood.sum() + np.log(np.exp(norm_log_complente_likelihood).sum(axis=1)).sum()
 
     def get_params(self, deep = True):
         return{
