@@ -265,6 +265,7 @@ class HyperbolicSecantMixtureVB(AbstractMixtureModel, DensityMixin, BaseEstimato
                     energy[calc_ind] =  (np.repeat(est_u_xi, M).reshape(n, self.K, M) * logcosh(sqrt_g_eta/2)).sum() - (np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum() + (est_v_eta * est_g_eta).sum()
                     energy[calc_ind] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
                     energy[calc_ind] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
+                    energy[calc_ind] += n*M*np.log(2*np.pi)
 
                     if calc_ind > 0 and np.abs(energy[calc_ind] - energy[calc_ind-1]) < self.tol:
                         energy = energy[:calc_ind]
