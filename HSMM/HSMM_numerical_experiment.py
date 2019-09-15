@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.4'
-#       jupytext_version: 1.1.3
+#       jupytext_version: 1.2.1
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -102,7 +102,9 @@ K = np.array([3, 5])
 # # コンポーネントの分布が正規分布の場合
 
 gerror_gmm = np.zeros(len(data_seeds))
+cerror_gmm = np.zeros(len(data_seeds))
 gerror_hsmm = np.zeros(len(data_seeds))
+cerror_hsmm = np.zeros(len(data_seeds))
 for i, data_seed in enumerate(data_seeds):
     ### データを生成する
     (train_X, train_label, train_label_arg) = GaussianMixtureModel().rvs(true_ratio, true_b, true_s, size = n, data_seed = data_seed)
@@ -121,10 +123,12 @@ for i, data_seed in enumerate(data_seeds):
     cerror_gmm[i] = (-true_latent_kl + gmm_obj.score_latent_kl())/len(train_X)
     cerror_hsmm[i] = (-true_latent_kl + hsmm_obj.score_latent_kl())/len(train_X)
     
-    true_empirical_entropy = GaussianMixtureModel().logpdf(test_X, true_ratio, true_b, true_s)
-    gerror_gmm[i] = (true_empirical_entropy - gmm_obj.predict_logproba(test_X))/len(test_X)
-    gerror_hsmm[i] = (true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
+    true_empirical_entropy = -GaussianMixtureModel().logpdf(test_X, true_ratio, true_b, true_s)
+    gerror_gmm[i] = (-true_empirical_entropy - gmm_obj.predict_logproba(test_X))/len(test_X)
+    gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
 
+
+cerror_hsmm
 
 print(f"""
 gerror_gmm: {gerror_gmm.mean()},
