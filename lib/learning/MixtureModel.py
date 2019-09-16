@@ -49,6 +49,15 @@ class AbstractMixtureModel(metaclass = ABCMeta):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def _calc_obj_func(self, **kwargs) -> float:
+        """
+        Calculate objective function to evaluate the estimated parameters.
+        Every inherited class will minimize the value of this function.
+        Arguments depend on each class, so kwargs are adopted.
+        """
+        raise NotImplementedError()
+
     def predict_logproba(self, test_X:np.ndarray):
         """
         Calculate log value of predictive distribution.
@@ -262,10 +271,8 @@ class HyperbolicSecantMixtureVB(AbstractMixtureModel, DensityMixin, BaseEstimato
 
                 if ite % self.step == 0:
                     ### Calculate evaluation function
-                    energy[calc_ind] =  (np.repeat(est_u_xi, M).reshape(n, self.K, M) * logcosh(sqrt_g_eta/2)).sum() - (np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum() + (est_v_eta * est_g_eta).sum()
-                    energy[calc_ind] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
-                    energy[calc_ind] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
-                    energy[calc_ind] += n*M*np.log(2*np.pi)
+                    energy[calc_ind] =  self._calc_obj_func(est_u_xi = est_u_xi, est_h_xi = est_h_xi, est_v_eta = est_v_eta, est_g_eta = est_g_eta,
+                                                            est_alpha = est_alpha, est_beta = est_beta, est_gamma = est_gamma, est_delta = est_delta)
 
                     if calc_ind > 0 and np.abs(energy[calc_ind] - energy[calc_ind-1]) < self.tol:
                         if self.is_trace: print(energy[calc_ind])
@@ -274,10 +281,8 @@ class HyperbolicSecantMixtureVB(AbstractMixtureModel, DensityMixin, BaseEstimato
                     calc_ind += 1
                     pass
                 pass
-            energy[-1] =  (np.repeat(est_u_xi, M).reshape(n, self.K, M) * logcosh(sqrt_g_eta/2)).sum() - (np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum() + (est_v_eta * est_g_eta).sum()
-            energy[-1] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
-            energy[-1] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
-            energy[-1] += n*M*np.log(2*np.pi)
+            energy[-1] = self._calc_obj_func(est_u_xi = est_u_xi, est_h_xi = est_h_xi, est_v_eta = est_v_eta, est_g_eta = est_g_eta,
+                                             est_alpha = est_alpha, est_beta = est_beta, est_gamma = est_gamma, est_delta = est_delta)
             # energy = energy[:calc_ind]
             if self.is_trace: print(energy[-1])
             if energy[-1] < min_energy:
@@ -314,6 +319,40 @@ class HyperbolicSecantMixtureVB(AbstractMixtureModel, DensityMixin, BaseEstimato
         expand_precision = np.repeat(np.diag(precision), n).reshape(M,n).T
         y = np.sqrt(expand_precision)*(x - np.repeat(mean, n).reshape(M,n).T)/2
         return(np.log(expand_precision)/2 - np.log(2*np.pi) - logcosh(y)).sum(axis = 1)
+
+    def _calc_obj_func(self, **kwargs) -> float:
+        """
+        -ELBO is calculated.
+        + Necessary arguments are as follows:
+            1. est_u_xi
+            2. est_h_xi
+            3. est_v_eta
+            4. est_g_eta
+            5. est_alpha
+            6. est_beta
+            7. est_gamma
+            8. est_delta
+        """
+        est_u_xi = kwargs["est_u_xi"]
+        est_h_xi = kwargs["est_h_xi"]
+        est_v_eta = kwargs["est_v_eta"]
+        est_g_eta = kwargs["est_g_eta"]
+        est_alpha = kwargs["est_alpha"]
+        est_beta = kwargs["est_beta"]
+        est_gamma = kwargs["est_gamma"]
+        est_delta = kwargs["est_delta"]
+
+        n, _, M = est_v_eta.shape
+
+        sqrt_g_eta = np.sqrt(est_g_eta)
+        max_h_xi = est_h_xi.max(axis = 1)
+        norm_h_xi = est_h_xi - np.repeat(max_h_xi, self.K).reshape(n,self.K)
+
+        energy =  (np.repeat(est_u_xi, M).reshape(n, self.K, M) * logcosh(sqrt_g_eta/2)).sum() - (np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum() + (est_v_eta * est_g_eta).sum()
+        energy += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
+        energy += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
+        energy += n*M*np.log(2*np.pi)
+        return energy
 
     def get_params(self, deep = True):
         return{
@@ -767,12 +806,7 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
                 ### Calculate evaluation function
                 if ite % self.step == 0:
                     ### Calculate evaluation function
-                    energy[calc_ind] =  -(np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum()
-                    energy[calc_ind] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
-                    energy[calc_ind] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
-                    energy[calc_ind] += n*M*np.log(2*np.pi)/2
-
-
+                    energy[calc_ind] =  self._calc_obj_func(est_u_xi = est_u_xi, est_h_xi = est_h_xi, est_alpha = est_alpha, est_beta = est_beta, est_gamma = est_gamma, est_delta = est_delta)
                     if calc_ind > 0 and np.abs(energy[calc_ind] - energy[calc_ind-1]) < self.tol:
                         if self.is_trace: print(energy[calc_ind])
                         energy = energy[:calc_ind]
@@ -780,10 +814,7 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
                     calc_ind += 1
                     pass
                 pass
-            energy[-1] =  -(np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum()
-            energy[-1] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
-            energy[-1] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
-            energy[-1] += n*M*np.log(2*np.pi)/2
+            energy[-1] = self._calc_obj_func(est_u_xi = est_u_xi, est_h_xi = est_h_xi, est_alpha = est_alpha, est_beta = est_beta, est_gamma = est_gamma, est_delta = est_delta)
 
             if self.is_trace: print(energy[-1])
             if energy[-1] < min_energy:
@@ -806,6 +837,36 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
 
     def _logpdf(self, x:np.ndarray, mean:np.ndarray, precision:np.ndarray) -> np.ndarray:
         return multivariate_normal.logpdf(x, mean,  np.diag(1/np.diag(precision)))
+
+    def _calc_obj_func(self, **kwargs) -> float:
+        """
+        -ELBO is calculated.
+        + Necessary arguments are as follows:
+            1. est_u_xi
+            2. est_h_xi
+            3. est_alpha
+            4. est_beta
+            5. est_gamma
+            6. est_delta
+        """
+        est_u_xi = kwargs["est_u_xi"]
+        est_h_xi = kwargs["est_h_xi"]
+        est_alpha = kwargs["est_alpha"]
+        est_beta = kwargs["est_beta"]
+        est_gamma = kwargs["est_gamma"]
+        est_delta = kwargs["est_delta"]
+
+        n = est_h_xi.shape[0]
+        M = est_delta.shape[1]
+
+        max_h_xi = est_h_xi.max(axis = 1)
+        norm_h_xi = est_h_xi - np.repeat(max_h_xi, self.K).reshape(n,self.K)
+
+        energy =  -(np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum()
+        energy += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
+        energy += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
+        energy += n*M*np.log(2*np.pi)/2
+        return energy
 
     def get_params(self, deep = True):
         return{
