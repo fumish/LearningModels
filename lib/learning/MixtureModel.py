@@ -255,7 +255,7 @@ class HyperbolicSecantMixtureVB(AbstractMixtureModel, DensityMixin, BaseEstimato
 
                 ### Update posterior distribution of latent variable
                 sqrt_g_eta = np.sqrt(est_g_eta)
-                est_h_xi = np.repeat(psi(est_alpha) - psi(est_alpha.sum()) + (psi(est_gamma) - np.log(est_delta)).sum(axis = 1)/2 - np.log(2*np.pi)/2, n).reshape(self.K,n).T - logcosh(sqrt_g_eta/2).sum(axis = 2)
+                est_h_xi = np.repeat(psi(est_alpha) - psi(est_alpha.sum()) + (psi(est_gamma) - np.log(est_delta)).sum(axis = 1)/2 - M*np.log(2*np.pi)/2, n).reshape(self.K,n).T - logcosh(sqrt_g_eta/2).sum(axis = 2)
                 max_h_xi = est_h_xi.max(axis = 1)
                 norm_h_xi = est_h_xi - np.repeat(max_h_xi, self.K).reshape(n,self.K)
                 est_u_xi = np.exp(norm_h_xi) / np.repeat(np.exp(norm_h_xi).sum(axis = 1), self.K).reshape(n, self.K)
@@ -679,6 +679,7 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
                     energy[calc_ind] =  -(np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum()
                     energy[calc_ind] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
                     energy[calc_ind] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
+                    energy[calc_ind] += n*M*np.log(2*pi)/2
 
                     if calc_ind > 0 and np.abs(energy[calc_ind] - energy[calc_ind-1]) < self.tol:
                         energy = energy[:calc_ind]
