@@ -268,11 +268,16 @@ class HyperbolicSecantMixtureVB(AbstractMixtureModel, DensityMixin, BaseEstimato
                     energy[calc_ind] += n*M*np.log(2*np.pi)
 
                     if calc_ind > 0 and np.abs(energy[calc_ind] - energy[calc_ind-1]) < self.tol:
+                        if self.is_trace: print(energy[calc_ind])
                         energy = energy[:calc_ind]
                         break
                     calc_ind += 1
                     pass
                 pass
+            energy[-1] =  (np.repeat(est_u_xi, M).reshape(n, self.K, M) * logcosh(sqrt_g_eta/2)).sum() - (np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum() + (est_v_eta * est_g_eta).sum()
+            energy[-1] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
+            energy[-1] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
+            energy[-1] += n*M*np.log(2*np.pi)
             # energy = energy[:calc_ind]
             if self.is_trace: print(energy[-1])
             if energy[-1] < min_energy:
@@ -611,7 +616,8 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
 
     def __init__(self, K:int = 3,
                  pri_alpha:float = 0.1, pri_beta:float = 0.001, pri_gamma:float = 2, pri_delta:float = 2,
-                 iteration:int = 1000, restart_num:int = 5, learning_seed:int = -1, tol:float = 1e-5, step:int = 20, is_trace = False):
+                 iteration:int = 1000, restart_num:int = 5, learning_seed:int = -1, method = "diag",
+                 tol:float = 1e-5, step:int = 20, is_trace = False):
         """
         Initialize the following parameters:
         1. pri_alpha: hyperparameter for prior distribution of symmetric Dirichlet distribution.
@@ -634,12 +640,30 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
         self.iteration = iteration
         self.restart_num = restart_num
         self.learning_seed = learning_seed
+        self.method = method
         self.tol = tol
         self.step = step
         self.is_trace = is_trace
         pass
 
-    def fit(self, train_X:np.ndarray, y:np.ndarray=None):
+    def fit(self, train_X:np.ndarray, y:np.ndarray = None):
+        if self.method == "diag":
+            return self._fit_diag(train_X, y)
+        elif self.method == "full":
+            return self._fit_full(train_X, y)
+        # elif method == "single":
+        #     return self._fit_signle(train_X, y)
+        else:
+            raise ValueError("""
+                            Method name is not supported. Supported method are as follows:
+                            1. diag: This is used for diagonal variance.
+                            2. full: This is used for Full covariance.
+                             """)
+        pass
+
+    # def _fit_single(self, train_X:np.ndarray, y:np.ndarray = None):
+
+    def _fit_full(self, train_X, y:np.ndarray):
         (n, M) = train_X.shape
         if self.learning_seed > 0:
             np.random.seed(self.learning_seed)
@@ -679,9 +703,10 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
                     energy[calc_ind] =  -(np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum()
                     energy[calc_ind] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
                     energy[calc_ind] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
-                    energy[calc_ind] += n*M*np.log(2*pi)/2
+                    energy[calc_ind] += n*M*np.log(2*np.pi)/2
 
                     if calc_ind > 0 and np.abs(energy[calc_ind] - energy[calc_ind-1]) < self.tol:
+                        if self.is_trace: print(energy[calc_ind])
                         energy = energy[:calc_ind]
                         break
                     calc_ind += 1
@@ -704,6 +729,80 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
                 result["energy"] = energy
             pass
         self.result_ = result
+
+    def _fit_diag(self, train_X:np.ndarray, y:np.ndarray=None):
+        (n, M) = train_X.shape
+        if self.learning_seed > 0:
+            np.random.seed(self.learning_seed)
+
+        ### Setting for static variable in the algorithm.
+        expand_x = np.repeat(train_X, self.K).reshape(n, M, self.K).transpose((0, 2, 1)) ### n * K * M data with the same matrix among 2nd dimension
+
+        min_energy = np.inf
+        result = dict()
+
+        for restart in range(self.restart_num):
+
+            energy = np.zeros(np.floor(self.iteration/self.step).astype(int))
+            calc_ind = 0
+            ### Setting for initial value
+            est_u_xi = np.random.dirichlet(alpha = np.ones(self.K), size=n)
+
+            ### Start learning.
+            for ite in range(self.iteration):
+                ### Update posterior distribution of parameter.
+                est_alpha = self.pri_alpha + est_u_xi.sum(axis = 0)
+                est_beta = np.repeat(self.pri_beta + est_u_xi.sum(axis = 0), M).reshape(self.K,M)
+                est_m = est_u_xi.T @ train_X / est_beta
+                est_gamma = np.repeat(self.pri_gamma + est_u_xi.sum(axis = 0)/2, M).reshape(self.K,M)
+                est_delta = self.pri_delta + est_u_xi.T @ (train_X**2) /2 - est_beta / 2 * est_m**2
+
+                ### Update posterior distribution of latent variable
+                est_g_eta = np.repeat(est_gamma / est_delta, n).reshape(self.K,M,n).transpose((2,0,1)) * (expand_x - np.repeat(est_m,n).reshape(self.K,M,n).transpose((2,0,1)))**2 + 1/np.repeat(est_beta, n).reshape(self.K,M,n).transpose((2,0,1))
+                est_h_xi = -M/2*np.log(2*np.pi) + np.repeat(psi(est_alpha) - psi(est_alpha.sum()) + (psi(est_gamma) - np.log(est_delta)).sum(axis = 1)/2, n).reshape(self.K,n).T - est_g_eta.sum(axis = 2)/2
+                max_h_xi = est_h_xi.max(axis = 1)
+                norm_h_xi = est_h_xi - np.repeat(max_h_xi,self.K).reshape(n,self.K)
+                est_u_xi = np.exp(norm_h_xi) / np.repeat(np.exp(norm_h_xi).sum(axis = 1), self.K).reshape(n,self.K)
+
+                ### Calculate evaluation function
+                if ite % self.step == 0:
+                    ### Calculate evaluation function
+                    energy[calc_ind] =  -(np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum()
+                    energy[calc_ind] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
+                    energy[calc_ind] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
+                    energy[calc_ind] += n*M*np.log(2*np.pi)/2
+
+
+                    if calc_ind > 0 and np.abs(energy[calc_ind] - energy[calc_ind-1]) < self.tol:
+                        if self.is_trace: print(energy[calc_ind])
+                        energy = energy[:calc_ind]
+                        break
+                    calc_ind += 1
+                    pass
+                pass
+            energy[-1] =  -(np.log(np.exp(norm_h_xi).sum(axis = 1)) + max_h_xi).sum() + (est_u_xi * est_h_xi).sum()
+            energy[-1] += gammaln(est_alpha.sum()) - gammaln(self.K*self.pri_alpha) + (-gammaln(est_alpha) + gammaln(self.pri_alpha)).sum()
+            energy[-1] += (np.log(est_beta/self.pri_beta)/2 + est_gamma * np.log(est_delta) - self.pri_gamma * np.log(self.pri_delta) - gammaln(est_gamma) + gammaln(self.pri_gamma)).sum()
+            energy[-1] += n*M*np.log(2*np.pi)/2
+
+            if self.is_trace: print(energy[-1])
+            if energy[-1] < min_energy:
+                min_energy = energy[-1]
+                result["ratio"] = est_alpha / est_alpha.sum()
+                result["mean"] = est_m
+                result["precision"] = est_gamma / est_delta
+                result["scale"] = np.array([np.diag(est_delta[k,:] / est_gamma[k,:]) for k in range(self.K)])
+                result["alpha"] = est_alpha
+                result["beta"] = est_beta
+                result["mu"] = est_m
+                result["gamma"] = est_gamma
+                result["delta"] = est_delta
+                result["h_xi"] = est_h_xi
+                result["u_xi"] = est_u_xi
+                result["energy"] = energy
+            pass
+        self.result_ = result
+        return self
 
     def _logpdf(self, x:np.ndarray, mean:np.ndarray, precision:np.ndarray) -> np.ndarray:
         return multivariate_normal.logpdf(x, mean,  np.diag(1/np.diag(precision)))

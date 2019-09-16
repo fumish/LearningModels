@@ -149,7 +149,7 @@ class GaussianMixtureModel(object):
         max_log_complente_likelihood = log_complente_likelihood.max(axis = 1)
         norm_log_complente_likelihood = log_complente_likelihood - np.repeat(max_log_complente_likelihood, K).reshape(n, K)
         posterior_prob = np.exp(norm_log_complente_likelihood) / np.repeat(np.exp(norm_log_complente_likelihood).sum(axis = 1), K).reshape(n, K)
-        return (-np.log(posterior_prob).sum(), posterior_prob)
+        return (-norm_log_complente_likelihood.sum() + np.log(np.exp(norm_log_complente_likelihood).sum(axis=1)).sum(), posterior_prob)
 
 def rgmm(ratio:np.ndarray, mean:np.ndarray, precision:np.ndarray, size:int=1, data_seed:int = -1):
     """
