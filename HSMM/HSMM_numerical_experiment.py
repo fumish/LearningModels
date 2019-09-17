@@ -67,7 +67,7 @@ n = 400
 N = 10000
 
 ### データの出方の個数
-ndataset = 30
+ndataset = 50
 
 ### 事前分布のハイパーパラメータ
 pri_params = {
@@ -210,7 +210,7 @@ gerror_hsmm = np.zeros(len(data_seeds))
 c01error_hsmm = np.zeros(len(data_seeds))
 # norm_energy_hsmm = np.zeros(len(data_seeds))
 
-true_df = 3
+true_df = 1.5
 for i, data_seed in enumerate(data_seeds):
     ### データを生成する
     (train_X, train_label, train_label_arg) = StudentMixtureModel.rvs(true_ratio, true_b, true_s, size = n, data_seed = data_seed, df = true_df)
