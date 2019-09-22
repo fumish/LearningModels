@@ -35,9 +35,8 @@ from scipy.stats import norm, t, cauchy, laplace, gumbel_r, gamma, skewnorm, par
 from typing import Callable
 from sklearn.mixture import BayesianGaussianMixture
 
-from learning.MixtureModel import HyperbolicSecantMixtureVB
-from learning.MixtureModel import GaussianMixtureModelVB
-from util.elementary_function import GaussianMixtureModel, HyperbolicSecantMixtureModel, StudentMixtureModel, LaplaceMixtureModel
+from learning import HyperbolicSecantMixtureVB, GaussianMixtureModelVB
+from util import GaussianMixtureModel, HyperbolicSecantMixtureModel, StudentMixtureModel, LaplaceMixtureModel, GumbelMixtureModel
 # -
 
 # # 問題設定
@@ -92,6 +91,8 @@ learning_iteration = 1000
 K = np.array([3, 5])
 # -
 
+GumbelMixtureModel.rvs(true_ratio, true_b, true_s, size=10)[0].shape
+
 # # 性能評価
 # + 1連の流れ
 #     1. データ生成する
@@ -124,9 +125,9 @@ for i, data_seed in enumerate(data_seeds):
                                          pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
                                          iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
     hsmm_obj.fit(train_X)
-    true_latent_kl, _ = GaussianMixtureModel().score_latent_kl(train_X, true_ratio, true_b, true_s)
-    cklerror_gmm[i] = (-true_latent_kl + gmm_diag_obj.score_latent_kl())/len(train_X)
-    cklerror_hsmm[i] = (-true_latent_kl + hsmm_obj.score_latent_kl())/len(train_X)
+    posterior_true_logprob = GaussianMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s)
+    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
     
     c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
@@ -175,9 +176,9 @@ for i, data_seed in enumerate(data_seeds):
                                          iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
     hsmm_obj.fit(train_X)
     
-    true_latent_kl, _ = HyperbolicSecantMixtureModel().score_latent_kl(train_X, true_ratio, true_b, true_s)
-    cklerror_gmm[i] = (-true_latent_kl + gmm_diag_obj.score_latent_kl())/len(train_X)
-    cklerror_hsmm[i] = (-true_latent_kl + hsmm_obj.score_latent_kl())/len(train_X)
+    posterior_true_logprob = HyperbolicSecantMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s)
+    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
     
     c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
@@ -189,7 +190,7 @@ for i, data_seed in enumerate(data_seeds):
 # -
 
 print(f"""
-gerror_gmm: {gerror_gmm.mean()},
+gerror_gmm: {gerror_gmm.mean()}, 
 gerror_hsmm: {gerror_hsmm.mean()},
 cklerror_gmm: {cklerror_gmm.mean()},
 cklerror_hsmm: {cklerror_hsmm.mean()},
@@ -201,16 +202,16 @@ c01error_hsmm: {c01error_hsmm.mean()}
 
 # +
 gerror_gmm = np.zeros(len(data_seeds))
-# cklerror_gmm = np.zeros(len(data_seeds))
+cklerror_gmm = np.zeros(len(data_seeds))
 c01error_gmm = np.zeros(len(data_seeds))
 # norm_energy_gmm = np.zeros(len(data_seeds))
 
 gerror_hsmm = np.zeros(len(data_seeds))
-# cklerror_hsmm = np.zeros(len(data_seeds))
+cklerror_hsmm = np.zeros(len(data_seeds))
 c01error_hsmm = np.zeros(len(data_seeds))
 # norm_energy_hsmm = np.zeros(len(data_seeds))
 
-true_df = 1.5
+true_df = 3
 for i, data_seed in enumerate(data_seeds):
     ### データを生成する
     (train_X, train_label, train_label_arg) = StudentMixtureModel.rvs(true_ratio, true_b, true_s, size = n, data_seed = data_seed, df = true_df)
@@ -227,9 +228,9 @@ for i, data_seed in enumerate(data_seeds):
                                          iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
     hsmm_obj.fit(train_X)
     
-#     true_latent_kl, _ = HyperbolicSecantMixtureModel().score_latent_kl(train_X, true_ratio, true_b, true_s)
-#     cklerror_gmm[i] = (-true_latent_kl + gmm_diag_obj.score_latent_kl())/len(train_X)
-#     cklerror_hsmm[i] = (-true_latent_kl + hsmm_obj.score_latent_kl())/len(train_X)
+    posterior_true_logprob = StudentMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s, df = true_df)
+    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)    
     
     c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
@@ -253,12 +254,12 @@ c01error_hsmm: {c01error_hsmm.mean()}
 
 # +
 gerror_gmm = np.zeros(len(data_seeds))
-# cklerror_gmm = np.zeros(len(data_seeds))
+cklerror_gmm = np.zeros(len(data_seeds))
 c01error_gmm = np.zeros(len(data_seeds))
 # norm_energy_gmm = np.zeros(len(data_seeds))
 
 gerror_hsmm = np.zeros(len(data_seeds))
-# cklerror_hsmm = np.zeros(len(data_seeds))
+cklerror_hsmm = np.zeros(len(data_seeds))
 c01error_hsmm = np.zeros(len(data_seeds))
 # norm_energy_hsmm = np.zeros(len(data_seeds))
 
@@ -278,9 +279,9 @@ for i, data_seed in enumerate(data_seeds):
                                          iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
     hsmm_obj.fit(train_X)
     
-#     true_latent_kl, _ = HyperbolicSecantMixtureModel().score_latent_kl(train_X, true_ratio, true_b, true_s)
-#     cklerror_gmm[i] = (-true_latent_kl + gmm_diag_obj.score_latent_kl())/len(train_X)
-#     cklerror_hsmm[i] = (-true_latent_kl + hsmm_obj.score_latent_kl())/len(train_X)
+    posterior_true_logprob = LaplaceMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s)
+    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)   
     
     c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
