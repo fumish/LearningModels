@@ -8,13 +8,14 @@ from abc import ABCMeta, abstractmethod
 ## 3rd party libraries
 import numpy as np
 from scipy.stats import multivariate_normal, t, laplace, gumbel_r
+from util.elementary_function import logcosh
 
 class AbstractMixtureModel(metaclass = ABCMeta):
     """
     This class is abstract class for mixture models to generate random variables, calculate probability density function,
     and calculate posterior latent distribution.
     """
-    #def _rvs_component(cls, loc:float=0, scale:float=1, size:int =1, **kwargs):
+    # def _rvs_component(cls, loc:float=0, scale:float=1, size:int =1, **kwargs):
     @classmethod
     @abstractmethod
     def _rvs_component(cls, loc:float=0, scale:float=1, size:int =1):
@@ -33,11 +34,10 @@ class AbstractMixtureModel(metaclass = ABCMeta):
 
     @classmethod
     def rvs(cls, ratio:np.ndarray, loc:np.ndarray, scale:np.ndarray, size:int=1, data_seed:int=-1,):
-        import pdb; pdb.set_trace()
         if data_seed > 0: np.random.seed(data_seed)
         data_label = np.random.multinomial(n = 1, pvals = ratio, size = size)
         data_label_arg = np.argmax(data_label, axis = 1)
-        X = np.array([[cls._rvs_component(loc[data_label_arg[i],j], scale[data_label_arg[i],j], size) for j in range(loc.shape[1])] for i in range(size)]).squeeze()
+        X = np.array([[cls._rvs_component(loc[data_label_arg[i],j], scale[data_label_arg[i],j], size=1) for j in range(loc.shape[1])] for i in range(size)]).squeeze()
         return (X, data_label, data_label_arg)
 
     @classmethod
@@ -47,10 +47,10 @@ class AbstractMixtureModel(metaclass = ABCMeta):
 
         loglik = np.zeros((n,K))
         for k in range(K):
-            if precision.ndim == 2:
-                loglik[:,k] = np.log(ratio[k]) + cls._logpdf_component(X, loc[k,:], scale[k,:])
-            elif precision.ndim == 3:
-                loglik[:,k] = np.log(ratio[k]) + cls._logpdf_component(X, loc[k,:],  scale[k,:,:])
+            if scale.ndim == 2:
+                loglik[:,k] = np.log(ratio[k]) + cls._logpdf_component(X, loc[k,:], scale[k,:]).sum(axis=1)
+            elif scale.ndim == 3:
+                loglik[:,k] = np.log(ratio[k]) + cls._logpdf_component(X, loc[k,:],  scale[k,:,:]).sum(axis=1)
             else:
                 raise ValueError("Error precision, dimension of precision must be 2 or 3!")
         max_loglik = loglik.max(axis = 1)
@@ -58,17 +58,22 @@ class AbstractMixtureModel(metaclass = ABCMeta):
         return (np.log(np.exp(norm_loglik).sum(axis = 1)) + max_loglik).sum()
 
     @classmethod
-    def score_latent_kl(cls, x:np.ndarray, ratio:np.ndarray, loc:np.ndarray, scale:np.ndarray):
+    def latent_posterior_logprob(cls, x:np.ndarray, ratio:np.ndarray, loc:np.ndarray, scale:np.ndarray):
         K = len(ratio)
         (n, M) = x.shape
 
-        log_complete_likelihood = (np.repeat(np.log(ratio),n).reshape(K,n) + np.array([cls._logpdf_component(x,  loc[k,:], scale[k,:]).sum(axis=1) for k in range(K)])).T
+        log_complete_likelihood = (np.repeat(np.log(ratio),n).reshape(K,n) + np.array([cls._logpdf_component(x, loc = loc[k,:], scale = scale[k,:]).sum(axis=1) for k in range(K)])).T
         max_log_complete_likelihood = log_complete_likelihood.max(axis = 1)
         norm_log_complete_likelihood = log_complete_likelihood - np.repeat(max_log_complete_likelihood, K).reshape(n, K)
-        posterior_prob = np.exp(norm_log_complete_likelihood) / np.repeat(np.exp(norm_log_complete_likelihood).sum(axis = 1), K).reshape(n, K)
-        return (-np.log(posterior_prob).sum(), posterior_prob)
+        log_posterior_p =  norm_log_complete_likelihood - np.log(np.repeat(np.exp(norm_log_complete_likelihood).sum(axis=1), K).reshape(n, K))
+        return log_posterior_p
 
 class GumbelMixtureModel(AbstractMixtureModel):
+    """
+    This is a class of mixture of gumbel distribution:
+    p(x|w) propto sum_k a_k exp(-(x-b_k)/s_k + exp(-(x-b_k)/s_k)),
+    w = (a_k, b_k, s_k)_k^K
+    """
     @classmethod
     def _rvs_component(cls, loc:float=0, scale:float=1, size:int =1):
         """
@@ -83,9 +88,53 @@ class GumbelMixtureModel(AbstractMixtureModel):
         """
         return gumbel_r.logpdf(x, loc, scale)
 
-    pass
+class HyperbolicSecantMixtureModel(AbstractMixtureModel):
+    @classmethod
+    def _rvs_component(cls, loc:float=0, scale:float=1, size:int =1):
+        """
+        Generate data following hyperbolic secant distribution.
+        Let $Y \sim standard_cauchy(x)$,
+        random variable $X = \frac{2}{\sqrt{s}}\sinh^{-1}(Y) + b$ follows to
+        X \sim p(x) = \frac{\sqrt{s}}{2\pi}\frac{1}{\cosh(s(x-b)/2)}.
+        """
+        Y = np.random.standard_cauchy(size=size)
+        X = 2/np.sqrt(scale)*np.arcsinh(Y) + loc
+        return X
 
-class HyperbolicSecantMixtureModel(object):
+    @classmethod
+    def _logpdf_component(cls, x:np.ndarray, loc:float=0, scale:float=1):
+        """
+        Calculate log probability density function.
+        """
+        (n, M) = x.shape
+        expand_scale = np.repeat(np.diag(scale), n).reshape(M,n).T
+        y = np.sqrt(expand_scale)*(x - np.repeat(loc, n).reshape(M,n).T)/2
+        return(np.log(expand_precision)/2 - np.log(2*np.pi) - logcosh(y))
+
+class StudentMixtureModel(AbstractMixtureModel):
+    @classmethod
+    def _rvs_component(cls, loc:float=0, scale:float=1, size:int =1):
+        """
+        Generate data following hyperbolic secant distribution.
+        Let $Y \sim standard_cauchy(x)$,
+        random variable $X = \frac{2}{\sqrt{s}}\sinh^{-1}(Y) + b$ follows to
+        X \sim p(x) = \frac{\sqrt{s}}{2\pi}\frac{1}{\cosh(s(x-b)/2)}.
+        """
+        Y = np.random.standard_cauchy(size=size)
+        X = 2/np.sqrt(scale)*np.arcsinh(Y) + loc
+        return X
+
+    @classmethod
+    def _logpdf_component(cls, x:np.ndarray, loc:float=0, scale:float=1):
+        """
+        Calculate log probability density function.
+        """
+        (n, M) = x.shape
+        expand_scale = np.repeat(np.diag(scale), n).reshape(M,n).T
+        y = np.sqrt(expand_scale)*(x - np.repeat(loc, n).reshape(M,n).T)/2
+        return(np.log(expand_precision)/2 - np.log(2*np.pi) - logcosh(y))
+
+class _HyperbolicSecantMixtureModel(object):
     """
     This is class of Hyperbolic Secant mixture model
     Like random variable of scipy.stats, this class has rvs, pdf, logpdf, and so on.
@@ -130,7 +179,7 @@ class HyperbolicSecantMixtureModel(object):
         Generate data following hyperbolic secant distribution.
         Let $Y \sim standard_cauchy(x)$,
         random variable $X = \frac{2}{\sqrt{s}}\sinh^{-1}(Y) + b$ follows to
-        $X \sim p(x) = \frac{\sqrt{s}}{2\pi}\frac{1}{\cosh(s(x-b)/2)}$.
+        X \sim p(x) = \frac{\sqrt{s}}{2\pi}\frac{1}{\cosh(s(x-b)/2)}.
         """
         Y = np.random.standard_cauchy(size=n)
         X = 2/np.sqrt(scale)*np.arcsinh(Y) + loc
@@ -157,7 +206,7 @@ class HyperbolicSecantMixtureModel(object):
         posterior_prob = np.exp(norm_log_complete_likelihood) / np.repeat(np.exp(norm_log_complete_likelihood).sum(axis = 1), K).reshape(n, K)
         return (-np.log(posterior_prob).sum(), posterior_prob)
 
-class StudentMixtureModel(object):
+class _StudentMixtureModel(object):
     """
     This is class of Student mixture model
     Like random variable of scipy.stats, this class has rvs, pdf, logpdf, and so on.

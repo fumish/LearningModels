@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.4'
-#       jupytext_version: 1.2.1
+#       jupytext_version: 1.1.3
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -90,8 +90,6 @@ learning_iteration = 1000
 ### 学習モデルのコンポーネントの数
 K = np.array([3, 5])
 # -
-
-GumbelMixtureModel.rvs(true_ratio, true_b, true_s, size=10)[0].shape
 
 # # 性能評価
 # + 1連の流れ
@@ -287,6 +285,57 @@ for i, data_seed in enumerate(data_seeds):
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
     
     true_empirical_entropy = -LaplaceMixtureModel.logpdf(test_X, true_ratio, true_b, true_s)
+    gerror_gmm[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
+    
+# -
+
+print(f"""
+gerror_gmm: {gerror_gmm.mean()},
+gerror_hsmm: {gerror_hsmm.mean()},
+cklerror_gmm: {cklerror_gmm.mean()},
+cklerror_hsmm: {cklerror_hsmm.mean()},
+c01error_gmm: {c01error_gmm.mean()},
+c01error_hsmm: {c01error_hsmm.mean()}
+""")
+
+# # コンポーネントの分布がガンベル分布の場合
+
+# +
+gerror_gmm = np.zeros(len(data_seeds))
+cklerror_gmm = np.zeros(len(data_seeds))
+c01error_gmm = np.zeros(len(data_seeds))
+# norm_energy_gmm = np.zeros(len(data_seeds))
+
+gerror_hsmm = np.zeros(len(data_seeds))
+cklerror_hsmm = np.zeros(len(data_seeds))
+c01error_hsmm = np.zeros(len(data_seeds))
+# norm_energy_hsmm = np.zeros(len(data_seeds))
+
+for i, data_seed in enumerate(data_seeds):
+    ### データを生成する
+    (train_X, train_label, train_label_arg) = GumbelMixtureModel.rvs(true_ratio, true_b, true_s, size = n, data_seed = data_seed)
+    (test_X, test_label, test_label_arg) = GumbelMixtureModel.rvs(true_ratio, true_b, true_s, size = N)
+    
+    gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, method = "diag", 
+                                     restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+    gmm_diag_obj.fit(train_X)
+    
+    hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
+                                         pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                         iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+    hsmm_obj.fit(train_X)
+    
+    posterior_true_logprob = GumbelMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s)
+    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)   
+    
+    c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    
+    true_empirical_entropy = -GumbelMixtureModel.logpdf(test_X, true_ratio, true_b, true_s)
     gerror_gmm[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
     gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
     
