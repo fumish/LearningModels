@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.4'
-#       jupytext_version: 1.1.3
+#       jupytext_version: 1.2.1
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -90,6 +90,10 @@ learning_iteration = 1000
 ### 学習モデルのコンポーネントの数
 K = np.array([3, 5])
 # -
+
+test = HyperbolicSecantMixtureModel.rvs(true_ratio, true_b, true_s, size=n)[0]
+plt.scatter(test[:,0], test[:,1])
+plt.show()
 
 # # 性能評価
 # + 1連の流れ
