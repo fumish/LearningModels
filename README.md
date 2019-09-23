@@ -1,10 +1,26 @@
-# gp_related
-gaussian process related works are created in this repo
-# LVA
-Learning library for local variational approximation (LVA).
-LVA is a method to approximate the Bayesian posterior distribution by bounding a joint distribution.  
+# LearnigModels
+Some estimators for various problem, clustering, classification, regression, and so on.
 
-Let $p(x^n|w)\varphi(w)$ be the joint distribution,
-then LVA makes the approximated distribution by
+Table of Contents
+=================
 
-$\underline{p}_{\xi}(x^n,w) \leq p(x^n,w) \leq \overline{p}_{\eta}(x^n,w).$
+* [gp_classifier](#gp_classifier)
+* [gp_regression](#gp_regression)
+* [hsmm](#hsmm)
+* [lib](#lib)
+* [lrmm](#lrmm)
+
+# gp_classifier
+Estimators for classification problem by using Gaussian Process.
+
+# gp_regression
+Estimators for regression problem by using Gaussian Process
+
+# hsmm
+Hyperbolic Secant Mixture Model
+
+# lib
+General Library in this repository
+
+# lrmm
+Logistic Regression Mixture Model
