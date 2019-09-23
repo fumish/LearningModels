@@ -66,7 +66,7 @@ n = 400
 N = 10000
 
 ### データの出方の個数
-ndataset = 50
+ndataset = 1
 
 ### 事前分布のハイパーパラメータ
 pri_params = {
@@ -90,10 +90,6 @@ learning_iteration = 1000
 ### 学習モデルのコンポーネントの数
 K = np.array([3, 5])
 # -
-
-test = HyperbolicSecantMixtureModel.rvs(true_ratio, true_b, true_s, size=n)[0]
-plt.scatter(test[:,0], test[:,1])
-plt.show()
 
 # # 性能評価
 # + 1連の流れ
