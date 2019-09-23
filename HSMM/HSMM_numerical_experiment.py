@@ -90,7 +90,7 @@ learning_seed_offset = 100
 learning_iteration = 1000
 
 ### 学習モデルのコンポーネントの数
-K = np.array([3, 5])
+K = np.array([5, 3])
 # -
 
 # # 性能評価
@@ -440,7 +440,7 @@ gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
 gmm_diag_obj.fit(train_X)
 
 gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
-                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = M+2, pri_delta = pri_params["pri_delta"], 
                                  iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
 gmm_cov_obj.fit(train_X)
 
@@ -497,7 +497,7 @@ gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
 gmm_diag_obj.fit(train_X)
 
 gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
-                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = 15, pri_delta = pri_params["pri_delta"], 
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = M+2, pri_delta = pri_params["pri_delta"], 
                                  iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
 gmm_cov_obj.fit(train_X)
 
@@ -525,7 +525,7 @@ c01error_hsmm: {c01error_hsmm}
 """)
 
 # # For real data
-# + wine data are used.
+# + breast cancer data
 # + generalization loss and 01 loss are calculated here.
 
 # +

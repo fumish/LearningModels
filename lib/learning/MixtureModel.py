@@ -119,6 +119,7 @@ class AbstractMixtureModel(metaclass = ABCMeta):
         check_is_fitted(self, "result_")
         log_complete_likelihood = self.result_["h_xi"]
         (n,K) =  log_complete_likelihood.shape
+        min_K = np.array([K, true_logp.shape[1]]).min()
 
         max_log_complete_likelihood = log_complete_likelihood.max(axis = 1)
         norm_log_complete_likelihood = log_complete_likelihood - np.repeat(max_log_complete_likelihood, K).reshape(n, K)
@@ -131,7 +132,7 @@ class AbstractMixtureModel(metaclass = ABCMeta):
             permed_log_pred_p = log_pred_p.copy()
             for i in range(len(perm)):
                 permed_log_pred_p[:,perm[i]] = log_pred_p[:,i]
-            cluster_kl = (np.exp(true_logp) * (true_logp - permed_log_pred_p)).sum()
+            cluster_kl = (np.exp(true_logp[:,:min_K]) * (true_logp[:,:min_K] - permed_log_pred_p[:,:min_K])).sum()
             if cluster_kl < min_kl:
                 min_kl = cluster_kl
                 min_perm = perm
