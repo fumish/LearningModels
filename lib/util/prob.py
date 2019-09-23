@@ -58,10 +58,9 @@ class AbstractMixtureModel(metaclass = ABCMeta):
         return (np.log(np.exp(norm_loglik).sum(axis = 1)) + max_loglik).sum()
 
     @classmethod
-    def latent_posterior_logprob(cls, x:np.ndarray, ratio:np.ndarray, loc:np.ndarray, scale:np.ndarray):
+    def latent_posterior_logprob(cls, x:np.ndarray, ratio:np.ndarray, loc:np.ndarray, scale:np.ndarray, **kwargs):
         K = len(ratio)
         (n, M) = x.shape
-
         log_complete_likelihood = (np.repeat(np.log(ratio),n).reshape(K,n) + np.array([cls._logpdf_component(x, loc = loc[k,:], scale = scale[k,:], **kwargs).sum(axis=1) for k in range(K)])).T
         max_log_complete_likelihood = log_complete_likelihood.max(axis = 1)
         norm_log_complete_likelihood = log_complete_likelihood - np.repeat(max_log_complete_likelihood, K).reshape(n, K)
@@ -106,10 +105,10 @@ class HyperbolicSecantMixtureModel(AbstractMixtureModel):
         """
         Calculate log probability density function.
         """
-        (n, M) = x.shape
-        expand_scale = np.repeat(np.diag(scale), n).reshape(M,n).T
-        y = np.sqrt(expand_scale)*(x - np.repeat(loc, n).reshape(M,n).T)/2
-        return(np.log(expand_precision)/2 - np.log(2*np.pi) - logcosh(y))
+        # (n, M) = x.shape
+        # expand_scale = np.repeat(np.diag(scale), n).reshape(M,n).T
+        # y = np.sqrt(scale)*(x - loc)/2
+        return(np.log(scale)/2 - np.log(2*np.pi) - logcosh(np.sqrt(scale)*(x - loc)/2))
 
 class StudentMixtureModel(AbstractMixtureModel):
     """
