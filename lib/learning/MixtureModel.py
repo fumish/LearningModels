@@ -71,7 +71,7 @@ class AbstractMixtureModel(metaclass = ABCMeta):
             if self.result_["precision"].ndim == 2:
                 loglik[:,k] = np.log(self.result_["ratio"][k]) + self._logpdf(test_X, self.result_["mean"][k,:],  np.diag(self.result_["precision"][k,:]))
             elif self.result_["precision"].ndim == 3:
-                loglik[:,k] = np.log(self.result_["ratio"][k]) + self._logpdf(test_X, self.result_["mean"][k,:],  self.result_["precision"][k,:,:])
+                loglik[:,k] = np.log(self.result_["ratio"][k]) + self._logpdf(test_X, self.result_["mean"][k,:],  self.result_["precision"][:,:,k])
             else:
                 raise ValueError("Error precision, dimension of precision must be 2 or 3!")
         max_loglik = loglik.max(axis = 1)
@@ -225,7 +225,7 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
                 est_beta = self.pri_beta + est_u_xi.sum(axis = 0)
                 est_m = est_u_xi.T @ train_X / np.repeat(est_beta,M).reshape(self.K, M)
                 est_gamma = self.pri_gamma + est_u_xi.sum(axis = 0)
-                est_delta = np.array([(np.repeat(est_u_xi[:,k],M).reshape(n,M)*train_X).T @ train_X/2 - est_m[k,:].reshape(M,1) @ est_m[k,:].reshape(1,M) / (2 * est_beta[k]) + pri_inv_Sigma for k in range(self.K)]).reshape(self.K,M,M).transpose((1,2,0))
+                est_delta = np.array([(np.repeat(est_u_xi[:,k],M).reshape(n,M)*train_X).T @ train_X - est_m[k,:].reshape(M,1) @ est_m[k,:].reshape(1,M) * est_beta[k] + pri_inv_Sigma for k in range(self.K)]).reshape(self.K,M,M).transpose((1,2,0))
                 # est_inv_delta = np.array([np.linalg.inv(est_delta[:,:,k]) for k in range(self.K)]).reshape(self.K, M,M).transpose((1,2,0))
 
                 ### Update posterior distribution of latent variable
