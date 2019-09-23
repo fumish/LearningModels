@@ -34,7 +34,7 @@ import seaborn as sns
 from scipy.stats import norm, t, cauchy, laplace, gumbel_r, gamma, skewnorm, pareto, multivariate_normal
 from typing import Callable
 from sklearn.mixture import BayesianGaussianMixture
-from sklearn.datasets import load_iris, load_wine
+from sklearn.datasets import load_iris, load_wine, load_breast_cancer
 
 from HyperbolicSecantMixtureModelVB import HyperbolicSecantMixtureVB
 from learning import GaussianMixtureModelVB
@@ -414,12 +414,6 @@ c01error_hsmm: {c01error_hsmm.mean()}
 # + Fisher's iris data are used.
 # + generalization loss and 01 loss are calculated here.
 
-train_X.mean(axis = 0)
-
-
-
-
-
 # +
 # データを生成する
 data = load_iris()
@@ -434,9 +428,9 @@ shuffled_ind = np.random.permutation(n + N)
 train_ind = shuffled_ind[:n]
 test_ind = shuffled_ind[n:]
 
-train_X = total_X[train_ind,2:]
+train_X = total_X[train_ind,:]
 train_label_arg = data.target[train_ind]
-test_X = total_X[test_ind,2:]
+test_X = total_X[test_ind,:]
 test_label_arg = data.target[test_ind,]
 n, M = train_X.shape
 
@@ -491,9 +485,66 @@ shuffled_ind = np.random.permutation(n + N)
 train_ind = shuffled_ind[:n]
 test_ind = shuffled_ind[n:]
 
-train_X = total_X[train_ind,2:]
+train_X = total_X[train_ind,:]
 train_label_arg = data.target[train_ind]
-test_X = total_X[test_ind,2:]
+test_X = total_X[test_ind,:]
+test_label_arg = data.target[test_ind,]
+n, M = train_X.shape
+
+gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                 iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
+gmm_diag_obj.fit(train_X)
+
+gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = 15, pri_delta = pri_params["pri_delta"], 
+                                 iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+gmm_cov_obj.fit(train_X)
+
+hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+hsmm_obj.fit(train_X)
+
+c01error_gmm_diag = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+c01error_gmm_cov = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
+c01error_hsmm = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
+
+gerror_gmm_diag = - gmm_diag_obj.predict_logproba(test_X)/len(test_X)
+gerror_gmm_cov=  - gmm_cov_obj.predict_logproba(test_X)/len(test_X)
+gerror_hsmm = - hsmm_obj.predict_logproba(test_X)/len(test_X)
+# -
+
+print(f"""
+gerror_gmm_diag: {gerror_gmm_diag},
+gerror_gmm_cov: {gerror_gmm_cov},
+gerror_hsmm: {gerror_hsmm},
+c01error_gmm_diag: {c01error_gmm_diag},
+c01error_gmm_cov: {c01error_gmm_cov},
+c01error_hsmm: {c01error_hsmm}
+""")
+
+# # For real data
+# + wine data are used.
+# + generalization loss and 01 loss are calculated here.
+
+# +
+# データを生成する
+data = load_breast_cancer()
+total_data = data.data
+mean_val = total_data.mean(axis = 0)
+std_val = total_data.std(axis = 0)
+total_X = (total_data - mean_val)/std_val
+
+n = 400
+N = total_X.shape[0] - n
+shuffled_ind = np.random.permutation(n + N)
+train_ind = shuffled_ind[:n]
+test_ind = shuffled_ind[n:]
+
+train_X = total_X[train_ind,:]
+train_label_arg = data.target[train_ind]
+test_X = total_X[test_ind,:]
 test_label_arg = data.target[test_ind,]
 n, M = train_X.shape
 
@@ -503,7 +554,7 @@ gmm_diag_obj = GaussianMixtureModelVB(K = K[1],
 gmm_diag_obj.fit(train_X)
 
 gmm_cov_obj = GaussianMixtureModelVB(K = K[1],
-                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = 15, pri_delta = pri_params["pri_delta"], 
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = M + 2, pri_delta = pri_params["pri_delta"], 
                                  iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
 gmm_cov_obj.fit(train_X)
 
