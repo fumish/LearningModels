@@ -1,8 +1,7 @@
 # Library for hyperbolic secant distribution
-This library is for hyperbolic secant distribution. The distribution is as follows:  
-<img src="https://latex.codecogs.com/gif.latex?p(x|w)&space;=&space;\frac{\sqrt{s}}{2\pi}sech&space;\bigl(&space;\frac{s}{2}x-b&space;\bigr)" title="p(x|w) = \frac{\sqrt{s}}{2\pi}sech \bigl( \frac{s}{2}(x-b) \bigr)" />,
-
-where <img src="https://latex.codecogs.com/gif.latex?x,&space;b&space;\in&space;\mathbb{R}^M" title="x, b \in \mathbb{R}"/> and <img src="https://latex.codecogs.com/gif.latex?s&space;\in&space;\mathbb{R}_&plus;" title="s \in \mathbb{R}_+" />.
+This library is for hyperbolic secant distribution. The distribution is as follows:
+$ p(x|w) = \frac{s}{2\pi} sech(\frac{s}{2}(x - b))$,  
+where $x, b \in \mathbb{R}, s \in \mathbb{R}_+$.
 
 To estimate the distribution, local variational approximation is used.
 Through the estimation, there are various usage.
@@ -15,3 +14,4 @@ Through the estimation, there are various usage.
 
 # Sample Code for use
 See example for more detail.
+
