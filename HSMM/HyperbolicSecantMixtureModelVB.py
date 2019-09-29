@@ -1,3 +1,22 @@
+## standard libraries
+import sys
+sys.path.append("../lib")
+import math
+import itertools
+from abc import ABCMeta, abstractmethod
+
+## 3rd party libraries
+import numpy as np
+from scipy.special import gammaln, psi, multigammaln
+from scipy.stats import multivariate_normal
+from sklearn.base import BaseEstimator
+from sklearn.base import DensityMixin
+from sklearn.utils.validation import check_is_fitted
+
+## local libraries
+from util import logcosh, ratio_tanh_x, multipsi
+from learning import AbstractMixtureModel
+
 class HyperbolicSecantMixtureVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
     """
     This class is to infer a hyperbolic secant mixture model (HSMM) by Variational Bayesian approach.

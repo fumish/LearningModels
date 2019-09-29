@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.4'
-#       jupytext_version: 1.2.1
+#       jupytext_version: 1.1.3
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -34,8 +34,10 @@ import seaborn as sns
 from scipy.stats import norm, t, cauchy, laplace, gumbel_r, gamma, skewnorm, pareto, multivariate_normal
 from typing import Callable
 from sklearn.mixture import BayesianGaussianMixture
+from sklearn.datasets import load_iris, load_wine, load_breast_cancer
 
-from learning import HyperbolicSecantMixtureVB, GaussianMixtureModelVB
+from HyperbolicSecantMixtureModelVB import HyperbolicSecantMixtureVB
+from learning import GaussianMixtureModelVB
 from util import GaussianMixtureModel, HyperbolicSecantMixtureModel, StudentMixtureModel, LaplaceMixtureModel, GumbelMixtureModel
 # -
 
@@ -46,7 +48,7 @@ from util import GaussianMixtureModel, HyperbolicSecantMixtureModel, StudentMixt
 
 true_ratio = np.array([0.33, 0.33, 0.34])
 true_delta = 0
-true_s = np.array([[0.1, 0.1], [0.5, 0.5], [1, 1]])
+true_s = np.array([[2, 2], [0.5, 0.5], [1, 1]])
 true_b = np.array([[2, 4], [-4, -2], [0, 0]])
 true_param = dict()
 true_param["ratio"] = true_ratio
@@ -66,7 +68,7 @@ n = 400
 N = 10000
 
 ### データの出方の個数
-ndataset = 1
+ndataset = 50
 
 ### 事前分布のハイパーパラメータ
 pri_params = {
@@ -88,7 +90,7 @@ learning_seed_offset = 100
 learning_iteration = 1000
 
 ### 学習モデルのコンポーネントの数
-K = np.array([3, 5])
+K = np.array([5, 3])
 # -
 
 # # 性能評価
@@ -101,9 +103,13 @@ K = np.array([3, 5])
 # # コンポーネントの分布が正規分布の場合
 
 # +
-gerror_gmm = np.zeros(len(data_seeds))
-cklerror_gmm = np.zeros(len(data_seeds))
-c01error_gmm = np.zeros(len(data_seeds))
+gerror_gmm_diag = np.zeros(len(data_seeds))
+cklerror_gmm_diag = np.zeros(len(data_seeds))
+c01error_gmm_diag = np.zeros(len(data_seeds))
+
+gerror_gmm_cov = np.zeros(len(data_seeds))
+cklerror_gmm_cov = np.zeros(len(data_seeds))
+c01error_gmm_cov = np.zeros(len(data_seeds))
 
 gerror_hsmm = np.zeros(len(data_seeds))
 cklerror_hsmm = np.zeros(len(data_seeds))
@@ -119,45 +125,57 @@ for i, data_seed in enumerate(data_seeds):
                                      iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
     gmm_diag_obj.fit(train_X)
     
+    gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+    gmm_cov_obj.fit(train_X)
+    
     hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
                                          pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
                                          iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
     hsmm_obj.fit(train_X)
     posterior_true_logprob = GaussianMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s)
-    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_gmm_diag[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_gmm_cov[i] = gmm_cov_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
     cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
     
-    c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_diag[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_cov[i] = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
     
     true_empirical_entropy = -GaussianMixtureModel.logpdf(test_X, true_ratio, true_b, true_s)
-    gerror_gmm[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_diag[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_cov[i] = (-true_empirical_entropy - gmm_cov_obj.predict_logproba(test_X))/len(test_X)
     gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
 # -
 
 
 print(f"""
-gerror_gmm: {gerror_gmm.mean()},
+gerror_gmm_diag: {gerror_gmm_diag.mean()},
+gerror_gmm_cov: {gerror_gmm_cov.mean()},
 gerror_hsmm: {gerror_hsmm.mean()},
-cklerror_gmm: {cklerror_gmm.mean()},
+cklerror_gmm_diag: {cklerror_gmm_diag.mean()},
+cklerror_gmm_cov: {cklerror_gmm_cov.mean()},
 cklerror_hsmm: {cklerror_hsmm.mean()},
-c01error_gmm: {c01error_gmm.mean()},
+c01error_gmm_diag: {c01error_gmm_diag.mean()},
+c01error_gmm_cov: {c01error_gmm_cov.mean()},
 c01error_hsmm: {c01error_hsmm.mean()}
 """)
 
 # # コンポーネントの分布が双曲線正割分布の場合
 
 # +
-gerror_gmm = np.zeros(len(data_seeds))
-cklerror_gmm = np.zeros(len(data_seeds))
-c01error_gmm = np.zeros(len(data_seeds))
-norm_energy_gmm = np.zeros(len(data_seeds))
+gerror_gmm_diag = np.zeros(len(data_seeds))
+cklerror_gmm_diag = np.zeros(len(data_seeds))
+c01error_gmm_diag = np.zeros(len(data_seeds))
+
+gerror_gmm_cov = np.zeros(len(data_seeds))
+cklerror_gmm_cov = np.zeros(len(data_seeds))
+c01error_gmm_cov = np.zeros(len(data_seeds))
 
 gerror_hsmm = np.zeros(len(data_seeds))
 cklerror_hsmm = np.zeros(len(data_seeds))
 c01error_hsmm = np.zeros(len(data_seeds))
-norm_energy_hsmm = np.zeros(len(data_seeds))
-
 for i, data_seed in enumerate(data_seeds):
     ### データを生成する
     (train_X, train_label, train_label_arg) = HyperbolicSecantMixtureModel.rvs(true_ratio, true_b, true_s, size = n, data_seed = data_seed)
@@ -165,9 +183,13 @@ for i, data_seed in enumerate(data_seeds):
     
     gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
                                      pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
-                                     iteration = 1000, method = "diag", 
-                                     restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
     gmm_diag_obj.fit(train_X)
+    
+    gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+    gmm_cov_obj.fit(train_X)
     
     hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
                                          pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
@@ -175,39 +197,46 @@ for i, data_seed in enumerate(data_seeds):
     hsmm_obj.fit(train_X)
     
     posterior_true_logprob = HyperbolicSecantMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s)
-    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_gmm_diag[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_gmm_cov[i] = gmm_cov_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
     cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
     
-    c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_diag[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_cov[i] = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
     
     true_empirical_entropy = -HyperbolicSecantMixtureModel.logpdf(test_X, true_ratio, true_b, true_s)
-    gerror_gmm[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_diag[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_cov[i] = (-true_empirical_entropy - gmm_cov_obj.predict_logproba(test_X))/len(test_X)
     gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
-    
 # -
 
 print(f"""
-gerror_gmm: {gerror_gmm.mean()}, 
+gerror_gmm_diag: {gerror_gmm_diag.mean()},
+gerror_gmm_cov: {gerror_gmm_cov.mean()},
 gerror_hsmm: {gerror_hsmm.mean()},
-cklerror_gmm: {cklerror_gmm.mean()},
+cklerror_gmm_diag: {cklerror_gmm_diag.mean()},
+cklerror_gmm_cov: {cklerror_gmm_cov.mean()},
 cklerror_hsmm: {cklerror_hsmm.mean()},
-c01error_gmm: {c01error_gmm.mean()},
+c01error_gmm_diag: {c01error_gmm_diag.mean()},
+c01error_gmm_cov: {c01error_gmm_cov.mean()},
 c01error_hsmm: {c01error_hsmm.mean()}
 """)
 
 # # コンポーネントの分布がt分布の場合
 
 # +
-gerror_gmm = np.zeros(len(data_seeds))
-cklerror_gmm = np.zeros(len(data_seeds))
-c01error_gmm = np.zeros(len(data_seeds))
-# norm_energy_gmm = np.zeros(len(data_seeds))
+gerror_gmm_diag = np.zeros(len(data_seeds))
+cklerror_gmm_diag = np.zeros(len(data_seeds))
+c01error_gmm_diag = np.zeros(len(data_seeds))
+
+gerror_gmm_cov = np.zeros(len(data_seeds))
+cklerror_gmm_cov = np.zeros(len(data_seeds))
+c01error_gmm_cov = np.zeros(len(data_seeds))
 
 gerror_hsmm = np.zeros(len(data_seeds))
 cklerror_hsmm = np.zeros(len(data_seeds))
 c01error_hsmm = np.zeros(len(data_seeds))
-# norm_energy_hsmm = np.zeros(len(data_seeds))
 
 true_df = 3
 for i, data_seed in enumerate(data_seeds):
@@ -217,9 +246,13 @@ for i, data_seed in enumerate(data_seeds):
     
     gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
                                      pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
-                                     iteration = 1000, method = "diag", 
-                                     restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
     gmm_diag_obj.fit(train_X)
+    
+    gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+    gmm_cov_obj.fit(train_X)
     
     hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
                                          pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
@@ -227,39 +260,46 @@ for i, data_seed in enumerate(data_seeds):
     hsmm_obj.fit(train_X)
     
     posterior_true_logprob = StudentMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s, df = true_df)
-    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
-    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)    
+    cklerror_gmm_diag[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_gmm_cov[i] = gmm_cov_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
     
-    c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_diag[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_cov[i] = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
     
     true_empirical_entropy = -StudentMixtureModel.logpdf(test_X, true_ratio, true_b, true_s, df = true_df)
-    gerror_gmm[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_diag[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_cov[i] = (-true_empirical_entropy - gmm_cov_obj.predict_logproba(test_X))/len(test_X)
     gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
-    
 # -
 
 print(f"""
-gerror_gmm: {gerror_gmm.mean()},
+gerror_gmm_diag: {gerror_gmm_diag.mean()},
+gerror_gmm_cov: {gerror_gmm_cov.mean()},
 gerror_hsmm: {gerror_hsmm.mean()},
-cklerror_gmm: {cklerror_gmm.mean()},
+cklerror_gmm_diag: {cklerror_gmm_diag.mean()},
+cklerror_gmm_cov: {cklerror_gmm_cov.mean()},
 cklerror_hsmm: {cklerror_hsmm.mean()},
-c01error_gmm: {c01error_gmm.mean()},
+c01error_gmm_diag: {c01error_gmm_diag.mean()},
+c01error_gmm_cov: {c01error_gmm_cov.mean()},
 c01error_hsmm: {c01error_hsmm.mean()}
 """)
 
 # # コンポーネントの分布がラプラス分布の場合
 
 # +
-gerror_gmm = np.zeros(len(data_seeds))
-cklerror_gmm = np.zeros(len(data_seeds))
-c01error_gmm = np.zeros(len(data_seeds))
-# norm_energy_gmm = np.zeros(len(data_seeds))
+gerror_gmm_diag = np.zeros(len(data_seeds))
+cklerror_gmm_diag = np.zeros(len(data_seeds))
+c01error_gmm_diag = np.zeros(len(data_seeds))
+
+gerror_gmm_cov = np.zeros(len(data_seeds))
+cklerror_gmm_cov = np.zeros(len(data_seeds))
+c01error_gmm_cov = np.zeros(len(data_seeds))
 
 gerror_hsmm = np.zeros(len(data_seeds))
 cklerror_hsmm = np.zeros(len(data_seeds))
 c01error_hsmm = np.zeros(len(data_seeds))
-# norm_energy_hsmm = np.zeros(len(data_seeds))
 
 for i, data_seed in enumerate(data_seeds):
     ### データを生成する
@@ -268,9 +308,13 @@ for i, data_seed in enumerate(data_seeds):
     
     gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
                                      pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
-                                     iteration = 1000, method = "diag", 
-                                     restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
     gmm_diag_obj.fit(train_X)
+    
+    gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+    gmm_cov_obj.fit(train_X)
     
     hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
                                          pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
@@ -278,39 +322,46 @@ for i, data_seed in enumerate(data_seeds):
     hsmm_obj.fit(train_X)
     
     posterior_true_logprob = LaplaceMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s)
-    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
-    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)   
+    cklerror_gmm_diag[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_gmm_cov[i] = gmm_cov_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
     
-    c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_diag[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_cov[i] = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
     
     true_empirical_entropy = -LaplaceMixtureModel.logpdf(test_X, true_ratio, true_b, true_s)
-    gerror_gmm[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_diag[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_cov[i] = (-true_empirical_entropy - gmm_cov_obj.predict_logproba(test_X))/len(test_X)
     gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
-    
 # -
 
 print(f"""
-gerror_gmm: {gerror_gmm.mean()},
+gerror_gmm_diag: {gerror_gmm_diag.mean()},
+gerror_gmm_cov: {gerror_gmm_cov.mean()},
 gerror_hsmm: {gerror_hsmm.mean()},
-cklerror_gmm: {cklerror_gmm.mean()},
+cklerror_gmm_diag: {cklerror_gmm_diag.mean()},
+cklerror_gmm_cov: {cklerror_gmm_cov.mean()},
 cklerror_hsmm: {cklerror_hsmm.mean()},
-c01error_gmm: {c01error_gmm.mean()},
+c01error_gmm_diag: {c01error_gmm_diag.mean()},
+c01error_gmm_cov: {c01error_gmm_cov.mean()},
 c01error_hsmm: {c01error_hsmm.mean()}
 """)
 
 # # コンポーネントの分布がガンベル分布の場合
 
 # +
-gerror_gmm = np.zeros(len(data_seeds))
-cklerror_gmm = np.zeros(len(data_seeds))
-c01error_gmm = np.zeros(len(data_seeds))
-# norm_energy_gmm = np.zeros(len(data_seeds))
+gerror_gmm_diag = np.zeros(len(data_seeds))
+cklerror_gmm_diag = np.zeros(len(data_seeds))
+c01error_gmm_diag = np.zeros(len(data_seeds))
+
+gerror_gmm_cov = np.zeros(len(data_seeds))
+cklerror_gmm_cov = np.zeros(len(data_seeds))
+c01error_gmm_cov = np.zeros(len(data_seeds))
 
 gerror_hsmm = np.zeros(len(data_seeds))
 cklerror_hsmm = np.zeros(len(data_seeds))
 c01error_hsmm = np.zeros(len(data_seeds))
-# norm_energy_hsmm = np.zeros(len(data_seeds))
 
 for i, data_seed in enumerate(data_seeds):
     ### データを生成する
@@ -319,9 +370,13 @@ for i, data_seed in enumerate(data_seeds):
     
     gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
                                      pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
-                                     iteration = 1000, method = "diag", 
-                                     restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
     gmm_diag_obj.fit(train_X)
+    
+    gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+    gmm_cov_obj.fit(train_X)
     
     hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
                                          pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
@@ -329,23 +384,199 @@ for i, data_seed in enumerate(data_seeds):
     hsmm_obj.fit(train_X)
     
     posterior_true_logprob = GumbelMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s)
-    cklerror_gmm[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
-    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)   
+    cklerror_gmm_diag[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_gmm_cov[i] = gmm_cov_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
     
-    c01error_gmm[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_diag[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_cov[i] = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
     c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
     
     true_empirical_entropy = -GumbelMixtureModel.logpdf(test_X, true_ratio, true_b, true_s)
-    gerror_gmm[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_diag[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_cov[i] = (-true_empirical_entropy - gmm_cov_obj.predict_logproba(test_X))/len(test_X)
     gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
-    
 # -
 
 print(f"""
-gerror_gmm: {gerror_gmm.mean()},
+gerror_gmm_diag: {gerror_gmm_diag.mean()},
+gerror_gmm_cov: {gerror_gmm_cov.mean()},
 gerror_hsmm: {gerror_hsmm.mean()},
-cklerror_gmm: {cklerror_gmm.mean()},
+cklerror_gmm_diag: {cklerror_gmm_diag.mean()},
+cklerror_gmm_cov: {cklerror_gmm_cov.mean()},
 cklerror_hsmm: {cklerror_hsmm.mean()},
-c01error_gmm: {c01error_gmm.mean()},
+c01error_gmm_diag: {c01error_gmm_diag.mean()},
+c01error_gmm_cov: {c01error_gmm_cov.mean()},
 c01error_hsmm: {c01error_hsmm.mean()}
+""")
+
+# # For real data
+# + Fisher's iris data are used.
+# + generalization loss and 01 loss are calculated here.
+
+# +
+# データを生成する
+data = load_iris()
+total_data = data.data
+mean_val = total_data.mean(axis = 0)
+std_val = total_data.std(axis = 0)
+total_X = (total_data - mean_val)/std_val
+
+n = 100
+N = total_X.shape[0] - n
+shuffled_ind = np.random.permutation(n + N)
+train_ind = shuffled_ind[:n]
+test_ind = shuffled_ind[n:]
+
+train_X = total_X[train_ind,:]
+train_label_arg = data.target[train_ind]
+test_X = total_X[test_ind,:]
+test_label_arg = data.target[test_ind,]
+n, M = train_X.shape
+
+gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                 iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
+gmm_diag_obj.fit(train_X)
+
+gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = M+2, pri_delta = pri_params["pri_delta"], 
+                                 iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+gmm_cov_obj.fit(train_X)
+
+hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+hsmm_obj.fit(train_X)
+
+c01error_gmm_diag = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+c01error_gmm_cov = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
+c01error_hsmm = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
+
+gerror_gmm_diag = - gmm_diag_obj.predict_logproba(test_X)/len(test_X)
+gerror_gmm_cov=  - gmm_cov_obj.predict_logproba(test_X)/len(test_X)
+gerror_hsmm = - hsmm_obj.predict_logproba(test_X)/len(test_X)
+# -
+
+print(f"""
+gerror_gmm_diag: {gerror_gmm_diag},
+gerror_gmm_cov: {gerror_gmm_cov},
+gerror_hsmm: {gerror_hsmm},
+c01error_gmm_diag: {c01error_gmm_diag},
+c01error_gmm_cov: {c01error_gmm_cov},
+c01error_hsmm: {c01error_hsmm}
+""")
+
+# # For real data
+# + wine data are used.
+# + generalization loss and 01 loss are calculated here.
+
+# +
+# データを生成する
+data = load_wine()
+total_data = data.data
+mean_val = total_data.mean(axis = 0)
+std_val = total_data.std(axis = 0)
+total_X = (total_data - mean_val)/std_val
+
+n = 150
+N = total_X.shape[0] - n
+shuffled_ind = np.random.permutation(n + N)
+train_ind = shuffled_ind[:n]
+test_ind = shuffled_ind[n:]
+
+train_X = total_X[train_ind,:]
+train_label_arg = data.target[train_ind]
+test_X = total_X[test_ind,:]
+test_label_arg = data.target[test_ind,]
+n, M = train_X.shape
+
+gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                 iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
+gmm_diag_obj.fit(train_X)
+
+gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = M+2, pri_delta = pri_params["pri_delta"], 
+                                 iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+gmm_cov_obj.fit(train_X)
+
+hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+hsmm_obj.fit(train_X)
+
+c01error_gmm_diag = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+c01error_gmm_cov = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
+c01error_hsmm = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
+
+gerror_gmm_diag = - gmm_diag_obj.predict_logproba(test_X)/len(test_X)
+gerror_gmm_cov=  - gmm_cov_obj.predict_logproba(test_X)/len(test_X)
+gerror_hsmm = - hsmm_obj.predict_logproba(test_X)/len(test_X)
+# -
+
+print(f"""
+gerror_gmm_diag: {gerror_gmm_diag},
+gerror_gmm_cov: {gerror_gmm_cov},
+gerror_hsmm: {gerror_hsmm},
+c01error_gmm_diag: {c01error_gmm_diag},
+c01error_gmm_cov: {c01error_gmm_cov},
+c01error_hsmm: {c01error_hsmm}
+""")
+
+# # For real data
+# + breast cancer data
+# + generalization loss and 01 loss are calculated here.
+
+# +
+# データを生成する
+data = load_breast_cancer()
+total_data = data.data
+mean_val = total_data.mean(axis = 0)
+std_val = total_data.std(axis = 0)
+total_X = (total_data - mean_val)/std_val
+
+n = 400
+N = total_X.shape[0] - n
+shuffled_ind = np.random.permutation(n + N)
+train_ind = shuffled_ind[:n]
+test_ind = shuffled_ind[n:]
+
+train_X = total_X[train_ind,:]
+train_label_arg = data.target[train_ind]
+test_X = total_X[test_ind,:]
+test_label_arg = data.target[test_ind,]
+n, M = train_X.shape
+
+gmm_diag_obj = GaussianMixtureModelVB(K = K[1],
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                 iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
+gmm_diag_obj.fit(train_X)
+
+gmm_cov_obj = GaussianMixtureModelVB(K = K[1],
+                                 pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = M + 2, pri_delta = pri_params["pri_delta"], 
+                                 iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+gmm_cov_obj.fit(train_X)
+
+hsmm_obj = HyperbolicSecantMixtureVB(K = K[1],                                     
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+hsmm_obj.fit(train_X)
+
+c01error_gmm_diag = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+c01error_gmm_cov = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
+c01error_hsmm = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
+
+gerror_gmm_diag = - gmm_diag_obj.predict_logproba(test_X)/len(test_X)
+gerror_gmm_cov=  - gmm_cov_obj.predict_logproba(test_X)/len(test_X)
+gerror_hsmm = - hsmm_obj.predict_logproba(test_X)/len(test_X)
+# -
+
+print(f"""
+gerror_gmm_diag: {gerror_gmm_diag},
+gerror_gmm_cov: {gerror_gmm_cov},
+gerror_hsmm: {gerror_hsmm},
+c01error_gmm_diag: {c01error_gmm_diag},
+c01error_gmm_cov: {c01error_gmm_cov},
+c01error_hsmm: {c01error_hsmm}
 """)

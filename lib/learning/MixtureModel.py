@@ -71,7 +71,7 @@ class AbstractMixtureModel(metaclass = ABCMeta):
             if self.result_["precision"].ndim == 2:
                 loglik[:,k] = np.log(self.result_["ratio"][k]) + self._logpdf(test_X, self.result_["mean"][k,:],  np.diag(self.result_["precision"][k,:]))
             elif self.result_["precision"].ndim == 3:
-                loglik[:,k] = np.log(self.result_["ratio"][k]) + self._logpdf(test_X, self.result_["mean"][k,:],  self.result_["precision"][k,:,:])
+                loglik[:,k] = np.log(self.result_["ratio"][k]) + self._logpdf(test_X, self.result_["mean"][k,:],  self.result_["precision"][:,:,k])
             else:
                 raise ValueError("Error precision, dimension of precision must be 2 or 3!")
         max_loglik = loglik.max(axis = 1)
@@ -119,6 +119,7 @@ class AbstractMixtureModel(metaclass = ABCMeta):
         check_is_fitted(self, "result_")
         log_complete_likelihood = self.result_["h_xi"]
         (n,K) =  log_complete_likelihood.shape
+        min_K = np.array([K, true_logp.shape[1]]).min()
 
         max_log_complete_likelihood = log_complete_likelihood.max(axis = 1)
         norm_log_complete_likelihood = log_complete_likelihood - np.repeat(max_log_complete_likelihood, K).reshape(n, K)
@@ -131,7 +132,7 @@ class AbstractMixtureModel(metaclass = ABCMeta):
             permed_log_pred_p = log_pred_p.copy()
             for i in range(len(perm)):
                 permed_log_pred_p[:,perm[i]] = log_pred_p[:,i]
-            cluster_kl = (np.exp(true_logp) * (true_logp - permed_log_pred_p)).sum()
+            cluster_kl = (np.exp(true_logp[:,:min_K]) * (true_logp[:,:min_K] - permed_log_pred_p[:,:min_K])).sum()
             if cluster_kl < min_kl:
                 min_kl = cluster_kl
                 min_perm = perm
@@ -225,7 +226,7 @@ class GaussianMixtureModelVB(AbstractMixtureModel, DensityMixin, BaseEstimator):
                 est_beta = self.pri_beta + est_u_xi.sum(axis = 0)
                 est_m = est_u_xi.T @ train_X / np.repeat(est_beta,M).reshape(self.K, M)
                 est_gamma = self.pri_gamma + est_u_xi.sum(axis = 0)
-                est_delta = np.array([(np.repeat(est_u_xi[:,k],M).reshape(n,M)*train_X).T @ train_X/2 - est_m[k,:].reshape(M,1) @ est_m[k,:].reshape(1,M) / (2 * est_beta[k]) + pri_inv_Sigma for k in range(self.K)]).reshape(self.K,M,M).transpose((1,2,0))
+                est_delta = np.array([(np.repeat(est_u_xi[:,k],M).reshape(n,M)*train_X).T @ train_X - est_m[k,:].reshape(M,1) @ est_m[k,:].reshape(1,M) * est_beta[k] + pri_inv_Sigma for k in range(self.K)]).reshape(self.K,M,M).transpose((1,2,0))
                 # est_inv_delta = np.array([np.linalg.inv(est_delta[:,:,k]) for k in range(self.K)]).reshape(self.K, M,M).transpose((1,2,0))
 
                 ### Update posterior distribution of latent variable
