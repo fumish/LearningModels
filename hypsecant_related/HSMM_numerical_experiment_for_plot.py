@@ -68,7 +68,7 @@ n = 400
 N = 10000
 
 ### データの出方の個数
-ndataset = 50
+ndataset = 1
 
 ### 事前分布のハイパーパラメータ
 pri_params = {
@@ -172,9 +172,9 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = np.zeros(len(est_label_arg))
-fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 2
 fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 2
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
@@ -187,9 +187,24 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = est_label_arg.copy()
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
+
+for k in np.unique(fitted_est_label_arg):
+    train_ind = np.where(fitted_est_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+plt.show()
+
+# +
+est_label_prob = gmm_cov_obj.result_["u_xi"]
+est_label_arg = np.argmax(est_label_prob, axis = 1)
+
+### 色をtrueと揃えるための処理
+fitted_est_label_arg = est_label_arg.copy()
 fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 2
-fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 1
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
@@ -292,6 +307,21 @@ for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
     plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
 plt.show()
+
+# +
+est_label_prob = gmm_cov_obj.result_["u_xi"]
+est_label_arg = np.argmax(est_label_prob, axis = 1)
+
+### 色をtrueと揃えるための処理
+fitted_est_label_arg = est_label_arg.copy()
+fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 1
+
+for k in np.unique(fitted_est_label_arg):
+    train_ind = np.where(fitted_est_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+plt.show()
 # -
 
 # # コンポーネントの分布がt分布の場合
@@ -368,8 +398,8 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = np.zeros(len(est_label_arg))
 fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 2
-fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 1
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
@@ -382,9 +412,9 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = est_label_arg.copy()
-fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 2
-fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 1
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
@@ -397,10 +427,9 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = est_label_arg.copy()
-fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 3
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 0
 fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 1
-fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 2
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
@@ -409,7 +438,8 @@ plt.show()
 # -
 
 # # コンポーネントの分布がt分布の場合
-# + $\nu = 1.9$の場合
+
+data_seeds = [201909]
 
 # +
 gerror_gmm_diag = np.zeros(len(data_seeds))
@@ -482,9 +512,11 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = np.zeros(len(est_label_arg))
-fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 3
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 1
 fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 4
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
@@ -498,7 +530,9 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = est_label_arg.copy()
 fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 3
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 4
 fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
 
 for k in np.unique(fitted_est_label_arg):
@@ -512,10 +546,11 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = est_label_arg.copy()
-fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 3
-fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 1
-fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 3
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 4
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
@@ -595,10 +630,11 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = np.zeros(len(est_label_arg))
-fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 1
-fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 2
-fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 3
+fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 3
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 4
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
@@ -611,9 +647,11 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = est_label_arg.copy()
+fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 0
 fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 2
-fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 3
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 4
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
@@ -626,10 +664,11 @@ est_label_arg = np.argmax(est_label_prob, axis = 1)
 
 ### 色をtrueと揃えるための処理
 fitted_est_label_arg = est_label_arg.copy()
-fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 2
-fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 3
-fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 0
-fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 3
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 4
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 2
 
 for k in np.unique(fitted_est_label_arg):
     train_ind = np.where(fitted_est_label_arg == k)[0]
