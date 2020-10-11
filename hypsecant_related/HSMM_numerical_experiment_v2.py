@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.4'
-#       jupytext_version: 1.1.3
+#       jupytext_version: 1.2.4
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -295,6 +295,7 @@ plt.show()
 # -
 
 # # コンポーネントの分布がt分布の場合
+# + $\nu = 3$の場合(期待値や分散が有限の場合)
 
 # +
 gerror_gmm_diag = np.zeros(len(data_seeds))
@@ -407,6 +408,239 @@ for k in np.unique(fitted_est_label_arg):
     plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
 plt.show()
 # -
+
+# # コンポーネントの分布がt分布の場合
+# + $\nu = 1.5$の場合(分散無限, 期待値有限の場合)
+
+# +
+gerror_gmm_diag = np.zeros(len(data_seeds))
+cklerror_gmm_diag = np.zeros(len(data_seeds))
+c01error_gmm_diag = np.zeros(len(data_seeds))
+
+gerror_gmm_cov = np.zeros(len(data_seeds))
+cklerror_gmm_cov = np.zeros(len(data_seeds))
+c01error_gmm_cov = np.zeros(len(data_seeds))
+
+gerror_hsmm = np.zeros(len(data_seeds))
+cklerror_hsmm = np.zeros(len(data_seeds))
+c01error_hsmm = np.zeros(len(data_seeds))
+
+true_df = 1.5
+for i, data_seed in enumerate(data_seeds):
+    ### データを生成する
+    (train_X, train_label, train_label_arg) = StudentMixtureModel.rvs(true_ratio, true_b, true_s, size = n, data_seed = data_seed, df = true_df)
+    (test_X, test_label, test_label_arg) = StudentMixtureModel.rvs(true_ratio, true_b, true_s, size = N, df = true_df)
+    
+    gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
+    gmm_diag_obj.fit(train_X)
+    
+    gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+    gmm_cov_obj.fit(train_X)
+    
+    hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
+                                         pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                         iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+    hsmm_obj.fit(train_X)
+    
+    posterior_true_logprob = StudentMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s, df = true_df)
+    cklerror_gmm_diag[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_gmm_cov[i] = gmm_cov_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    
+    c01error_gmm_diag[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_cov[i] = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    
+    true_empirical_entropy = -StudentMixtureModel.logpdf(test_X, true_ratio, true_b, true_s, df = true_df)
+    gerror_gmm_diag[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_cov[i] = (-true_empirical_entropy - gmm_cov_obj.predict_logproba(test_X))/len(test_X)
+    gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
+# -
+
+print(f"""
+gerror_gmm_diag: {gerror_gmm_diag.mean()},
+gerror_gmm_cov: {gerror_gmm_cov.mean()},
+gerror_hsmm: {gerror_hsmm.mean()},
+cklerror_gmm_diag: {cklerror_gmm_diag.mean()},
+cklerror_gmm_cov: {cklerror_gmm_cov.mean()},
+cklerror_hsmm: {cklerror_hsmm.mean()},
+c01error_gmm_diag: {c01error_gmm_diag.mean()},
+c01error_gmm_cov: {c01error_gmm_cov.mean()},
+c01error_hsmm: {c01error_hsmm.mean()}
+""")
+
+for k in np.unique(train_label_arg):
+    train_ind = np.where(train_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+
+train_label_arg
+
+# +
+est_label_prob = gmm_diag_obj.result_["u_xi"]
+est_label_arg = np.argmax(est_label_prob, axis = 1)
+
+### 色をtrueと揃えるための処理
+fitted_est_label_arg = np.zeros(len(est_label_arg))
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 0
+
+for k in np.unique(fitted_est_label_arg):
+    train_ind = np.where(fitted_est_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+plt.show()
+
+# +
+est_label_prob = hsmm_obj.result_["u_xi"]
+est_label_arg = np.argmax(est_label_prob, axis = 1)
+
+### 色をtrueと揃えるための処理
+fitted_est_label_arg = est_label_arg.copy()
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 0
+
+for k in np.unique(fitted_est_label_arg):
+    train_ind = np.where(fitted_est_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+plt.show()
+
+# +
+est_label_prob = gmm_cov_obj.result_["u_xi"]
+est_label_arg = np.argmax(est_label_prob, axis = 1)
+
+### 色をtrueと揃えるための処理
+fitted_est_label_arg = est_label_arg.copy()
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 1
+
+for k in np.unique(fitted_est_label_arg):
+    train_ind = np.where(fitted_est_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+plt.show()
+# -
+
+# # コンポーネントの分布がt分布の場合
+# + $\nu = 1$の場合(分散なし, 期待値なしの場合)
+
+# +
+gerror_gmm_diag = np.zeros(len(data_seeds))
+cklerror_gmm_diag = np.zeros(len(data_seeds))
+c01error_gmm_diag = np.zeros(len(data_seeds))
+
+gerror_gmm_cov = np.zeros(len(data_seeds))
+cklerror_gmm_cov = np.zeros(len(data_seeds))
+c01error_gmm_cov = np.zeros(len(data_seeds))
+
+gerror_hsmm = np.zeros(len(data_seeds))
+cklerror_hsmm = np.zeros(len(data_seeds))
+c01error_hsmm = np.zeros(len(data_seeds))
+
+true_df = 1
+for i, data_seed in enumerate(data_seeds):
+    ### データを生成する
+    (train_X, train_label, train_label_arg) = StudentMixtureModel.rvs(true_ratio, true_b, true_s, size = n, data_seed = data_seed, df = true_df)
+    (test_X, test_label, test_label_arg) = StudentMixtureModel.rvs(true_ratio, true_b, true_s, size = N, df = true_df)
+    
+    gmm_diag_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "diag")
+    gmm_diag_obj.fit(train_X)
+    
+    gmm_cov_obj = GaussianMixtureModelVB(K = K[0],
+                                     pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                     iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset, method = "full")
+    gmm_cov_obj.fit(train_X)
+    
+    hsmm_obj = HyperbolicSecantMixtureVB(K = K[0],                                     
+                                         pri_alpha = pri_params["pri_alpha"], pri_beta = pri_params["pri_beta"], pri_gamma = pri_params["pri_gamma"], pri_delta = pri_params["pri_delta"], 
+                                         iteration = 1000, restart_num=learning_num, learning_seed=data_seed + learning_seed_offset)
+    hsmm_obj.fit(train_X)
+    
+    posterior_true_logprob = StudentMixtureModel().latent_posterior_logprob(train_X, true_ratio, true_b, true_s, df = true_df)
+    cklerror_gmm_diag[i] = gmm_diag_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_gmm_cov[i] = gmm_cov_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    cklerror_hsmm[i] = hsmm_obj.score_latent_kl(posterior_true_logprob)[0]/len(train_X)
+    
+    c01error_gmm_diag[i] = gmm_diag_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_gmm_cov[i] = gmm_cov_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    c01error_hsmm[i] = hsmm_obj.score_clustering(train_label_arg)[0]/len(train_X)
+    
+    true_empirical_entropy = -StudentMixtureModel.logpdf(test_X, true_ratio, true_b, true_s, df = true_df)
+    gerror_gmm_diag[i] = (-true_empirical_entropy - gmm_diag_obj.predict_logproba(test_X))/len(test_X)
+    gerror_gmm_cov[i] = (-true_empirical_entropy - gmm_cov_obj.predict_logproba(test_X))/len(test_X)
+    gerror_hsmm[i] = (-true_empirical_entropy - hsmm_obj.predict_logproba(test_X))/len(test_X)
+# -
+
+print(f"""
+gerror_gmm_diag: {gerror_gmm_diag.mean()},
+gerror_gmm_cov: {gerror_gmm_cov.mean()},
+gerror_hsmm: {gerror_hsmm.mean()},
+cklerror_gmm_diag: {cklerror_gmm_diag.mean()},
+cklerror_gmm_cov: {cklerror_gmm_cov.mean()},
+cklerror_hsmm: {cklerror_hsmm.mean()},
+c01error_gmm_diag: {c01error_gmm_diag.mean()},
+c01error_gmm_cov: {c01error_gmm_cov.mean()},
+c01error_hsmm: {c01error_hsmm.mean()}
+""")
+
+for k in np.unique(train_label_arg):
+    train_ind = np.where(train_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+
+# +
+est_label_prob = gmm_diag_obj.result_["u_xi"]
+est_label_arg = np.argmax(est_label_prob, axis = 1)
+
+### 色をtrueと揃えるための処理
+fitted_est_label_arg = np.zeros(len(est_label_arg))
+fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
+
+for k in np.unique(fitted_est_label_arg):
+    train_ind = np.where(fitted_est_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+plt.show()
+
+# +
+est_label_prob = hsmm_obj.result_["u_xi"]
+est_label_arg = np.argmax(est_label_prob, axis = 1)
+
+### 色をtrueと揃えるための処理
+fitted_est_label_arg = est_label_arg.copy()
+fitted_est_label_arg[np.where(est_label_arg == 0)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 2
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 1
+
+for k in np.unique(fitted_est_label_arg):
+    train_ind = np.where(fitted_est_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+plt.show()
+
+# +
+est_label_prob = gmm_cov_obj.result_["u_xi"]
+est_label_arg = np.argmax(est_label_prob, axis = 1)
+
+### 色をtrueと揃えるための処理
+fitted_est_label_arg = est_label_arg.copy()
+fitted_est_label_arg[np.where(est_label_arg == 1)[0]] = 0
+fitted_est_label_arg[np.where(est_label_arg == 2)[0]] = 3
+fitted_est_label_arg[np.where(est_label_arg == 3)[0]] = 1
+fitted_est_label_arg[np.where(est_label_arg == 4)[0]] = 2
+
+for k in np.unique(fitted_est_label_arg):
+    train_ind = np.where(fitted_est_label_arg == k)[0]
+    plt.scatter(train_X[train_ind,0], train_X[train_ind,1])
+plt.show()
+# -
+
+kurtosis(train_X)
 
 # # コンポーネントの分布がラプラス分布の場合
 
